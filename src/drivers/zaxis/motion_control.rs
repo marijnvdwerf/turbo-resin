@@ -14,17 +14,21 @@ use stm32f1xx_hal::{
 };
 
 use embedded_hal::digital::v2::OutputPin;
-
 use super::step_generator::StepGenerator;
 
-use crate::{consts::stepper::*, runtime::debug, drivers::clock::delay_ns};
+use crate::drivers::clock::delay_ns;
+use crate::consts::zaxis::{
+    stepper::*,
+    motion_control::*,
+};
+
 
 use super::{
     prelude::*,
     drv8424::{Drv8424, Direction},
 };
 
-pub struct Stepper {
+pub struct MotionControl {
     drv8424: Drv8424,
     step_timer: CountDownTimer<TIM7>,
     stepgen: StepGenerator,
@@ -32,7 +36,7 @@ pub struct Stepper {
     pub target: Steps,
 }
 
-impl Stepper {
+impl MotionControl {
     pub fn new(
         drv8424: Drv8424,
         step_timer: Timer<TIM7>, // Any timer will do.
@@ -40,7 +44,7 @@ impl Stepper {
         let stepgen = StepGenerator::new(
             MAX_ACCELERATION.mm().0 as f32,
             MAX_DECELERATION.mm().0 as f32,
-            DEFAULT_MAX_SPEED.mm().0 as f32,
+            MAX_SPEED.mm().0 as f32,
         );
 
         let step_timer = step_timer.start_with_tick_freq(STEP_TIMER_FREQ.hz());

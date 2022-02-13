@@ -12,9 +12,9 @@ use crate::drivers::{
     display::Display,
     touch_screen::TouchScreen,
     zaxis::{
-        stepper::Stepper,
-        sensor::Sensor,
-        drv8424::Drv8424,
+        MotionControl,
+        BottomSensor,
+        Drv8424,
     },
     lcd::Lcd,
     clock,
@@ -32,10 +32,10 @@ pub struct Machine {
     pub ext_flash: ExtFlash,
     pub display: Display,
     pub touch_screen: TouchScreen,
-    pub stepper: Stepper,
+    pub stepper: MotionControl,
     pub systick: Systick,
     pub lcd: Lcd,
-    pub zsensor: Sensor,
+    pub z_bottom_sensor: BottomSensor,
 }
 
 impl Machine {
@@ -115,11 +115,8 @@ impl Machine {
 
         let (pa15, pb3, pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
 
-        let zsensor = Sensor::new(
-            pb3,
-            // pb4,
-            &mut gpiob.crl,
-        );
+        // pb4 is used for TopSensor (or on Anycubic, it's the door sensor)
+        let z_bottom_sensor = BottomSensor::new(pb3, &mut gpiob.crl);
 
         let drv8424 = Drv8424::new(
             gpioe.pe4, gpioe.pe5, gpioe.pe6,
@@ -130,7 +127,7 @@ impl Machine {
             &mut gpioa.crl, gpioc.crl, &mut gpioe.crl, &mut afio.mapr,
         );
 
-        let stepper = Stepper::new(drv8424, Timer::new(dp.TIM7, &clocks));
+        let stepper = MotionControl::new(drv8424, Timer::new(dp.TIM7, &clocks));
 
         //--------------------------
         // Systicks for RTIC
@@ -139,6 +136,6 @@ impl Machine {
         let syst = delay.free();
         let systick = Systick::new(syst, clocks.sysclk().0);
 
-        Self { ext_flash, display, touch_screen, stepper, lcd, zsensor, systick }
+        Self { ext_flash, display, touch_screen, stepper, lcd, z_bottom_sensor, systick }
     }
 }

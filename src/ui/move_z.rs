@@ -9,11 +9,12 @@ use lvgl::{
 use alloc::format;
 
 use lvgl::cstr_core::CStr;
-use crate::{drivers::zaxis::{
+use crate::drivers::zaxis::{
     prelude::*,
-    stepper::Stepper,
-    sensor::Sensor,
-}, consts::stepper::DEFAULT_MAX_SPEED};
+    MotionControl,
+    BottomSensor,
+};
+use crate::consts::zaxis::motion_control::*;
 
 #[derive(Debug)]
 enum UserAction {
@@ -85,7 +86,7 @@ impl MoveZ {
 
                 let value = (value as f32)/10000.0;
                 let value = value*value*value;
-                let value = value * DEFAULT_MAX_SPEED;
+                let value = value * MAX_SPEED;
 
                 context.user_action = Some(UserAction::SetSpeed(value));
             });
@@ -136,8 +137,8 @@ impl MoveZ {
     }
 
     pub fn update(&mut self,
-        stepper: &mut impl rtic::Mutex<T=Stepper>,
-        zsensor: &mut Sensor,
+        stepper: &mut impl rtic::Mutex<T=MotionControl>,
+        zsensor: &mut BottomSensor,
     ) {
         match self.user_action.take() {
             Some(UserAction::MoveUp) => {
@@ -155,7 +156,7 @@ impl MoveZ {
             }
             Some(UserAction::SetSpeed(v)) => stepper.lock(|s| s.set_max_speed(v.mm())),
             Some(UserAction::Calibrate) => {
-                zsensor.calibrate(stepper);
+                //zsensor.calibrate(stepper);
                 self.btn_calibrate.clear_state(State::CHECKED | State::DISABLED);
             }
             None => {}

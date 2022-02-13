@@ -5,7 +5,10 @@
 // by Mihaylo Y. Stoychitch
 // I prefer it to https://www.embedded.com/generate-stepper-motor-speed-profiles-in-real-time/
 
-use crate::consts::stepper::*;
+use crate::consts::zaxis::{
+    hardware::*,
+    stepper::*,
+};
 
 const TIMER_FREQ: f32 = STEP_TIMER_FREQ as f32;
 const MAX_STEP_MULTIPLIER: u32 = DRIVER_MICROSTEPS;

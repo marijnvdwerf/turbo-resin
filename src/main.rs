@@ -23,8 +23,8 @@ use drivers::{
     display::Display as RawDisplay,
 
     zaxis::{
-        sensor::Sensor,
-        stepper::Stepper,
+        BottomSensor,
+        MotionControl,
     }
 };
 
@@ -96,7 +96,7 @@ mod app {
     /* resources shared across RTIC tasks */
     #[shared]
     struct Shared {
-        stepper: Stepper,
+        stepper: MotionControl,
         #[lock_free]
         touch_screen: drivers::touch_screen::TouchScreen,
         last_touch_event: Option<TouchEvent>,
@@ -111,7 +111,7 @@ mod app {
         display: Display::<RawDisplay>,
         move_z_ui: Screen<ui::MoveZ>,
         lcd: drivers::lcd::Lcd,
-        zsensor: Sensor,
+        z_bottom_sensor: BottomSensor,
     }
 
     fn lvgl_init(display: RawDisplay) -> (Lvgl, Display<RawDisplay>, InputDevice<TouchPad>) {
@@ -144,7 +144,7 @@ mod app {
         let stepper = machine.stepper;
         let touch_screen = machine.touch_screen;
         let lcd = machine.lcd;
-        let zsensor = machine.zsensor;
+        let z_bottom_sensor = machine.z_bottom_sensor;
 
         let (mut lvgl, mut display, lvgl_input_device) = lvgl_init(display);
 
@@ -168,7 +168,7 @@ mod app {
 
         (
             Shared { stepper, touch_screen, last_touch_event },
-            Local { lvgl, lvgl_ticks, lvgl_input_device, display, move_z_ui, lcd, zsensor },
+            Local { lvgl, lvgl_ticks, lvgl_input_device, display, move_z_ui, lcd, z_bottom_sensor },
             init::Monotonics(systick),
         )
     }
@@ -213,11 +213,11 @@ mod app {
         }
     }
 
-    #[idle(local = [lvgl, lvgl_input_device, display, move_z_ui, lcd, zsensor], shared = [last_touch_event, stepper])]
+    #[idle(local = [lvgl, lvgl_input_device, display, move_z_ui, lcd, z_bottom_sensor], shared = [last_touch_event, stepper])]
     fn idle(mut ctx: idle::Context) -> ! {
         let lvgl = ctx.local.lvgl;
         let lvgl_input_device = ctx.local.lvgl_input_device;
-        let zsensor = ctx.local.zsensor;
+        let zsensor = ctx.local.z_bottom_sensor;
         let move_z_ui = ctx.local.move_z_ui.context().as_mut().unwrap();
 
         loop {
