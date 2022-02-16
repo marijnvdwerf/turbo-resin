@@ -108,7 +108,6 @@ static LAST_TOUCH_EVENT: Mutex<RefCell<Option<TouchEvent>>> = Mutex::new(RefCell
 async fn touch_screen_task(mut touch_screen: TouchScreen) {
     loop {
         let touch_event = touch_screen.get_next_touch_event().await;
-        debug!("touch event: {:?}", touch_event);
         LAST_TOUCH_EVENT.lock(|e| *e.borrow_mut() = touch_event);
     }
 }
@@ -164,6 +163,8 @@ static EXECUTOR_LOW: Forever<Executor> = Forever::new();
 
 fn main() -> ! {
     rtt_target::rtt_init_print!();
+
+    crate::drivers::clock::setup_clock_120m_hxtal();
 
     let mut config = Config::default();
     config.rcc.sys_ck = Some(Hertz(36_000_000));
