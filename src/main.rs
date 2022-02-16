@@ -19,7 +19,8 @@ use stm32f1xx_hal::pac::Interrupt;
 use consts::system::*;
 use consts::display::*;
 use drivers::{
-    machine::{Systick, Machine, prelude::*},
+    machine::Machine,
+    //machine::{Systick, Machine, prelude::*},
     touch_screen::{TouchEvent, TouchScreen, ADS7846},
     display::Display as RawDisplay,
 
@@ -122,13 +123,18 @@ fn main() -> ! {
     // TIM3 is taken for time accounting. It's configurable in Cargo.toml
     let p = embassy_stm32::init(config);
 
+
     let touch_screen = TouchScreen::new(
         ADS7846::new(p.PC7, p.PC8, p.PC9, p.PA8, p.PA9, p.EXTI9));
+    //let cp = cortex_m::Peripherals::take().unwrap();
 
+    //let machine = Machine::new(p);
+
+
+    //let touch_screen = machine.touch_screen;
 
 
     /*
-    // High-priority executor: SWI1_EGU1, priority level 6
     let irq = interrupt::take!(UART4);
     irq.set_priority(interrupt::Priority::P6);
     let executor = EXECUTOR_HIGH.put(InterruptExecutor::new(irq));
@@ -137,24 +143,54 @@ fn main() -> ! {
     });
     */
 
-    // Medium-priority executor: SWI0_EGU0, priority level 7
-    let irq = interrupt::take!(UART5);
-    irq.set_priority(interrupt::Priority::P7);
-    let executor = EXECUTOR_MED.put(InterruptExecutor::new(irq));
-    executor.start(|spawner| {
-        spawner.spawn(touch_screen_task(touch_screen)).unwrap();
-    });
+    // Medium priority executor
+    {
+        //let irq = interrupt::take!(CAN1_RX1);
+        let irq = interrupt::take!(UART5);
+        irq.set_priority(interrupt::Priority::P7);
+        let executor = EXECUTOR_MED.put(InterruptExecutor::new(irq));
+        executor.start(|spawner| {
+            spawner.spawn(touch_screen_task(touch_screen)).unwrap();
+        });
+    }
+
+    loop {
+
+    }
 
     // Low priority executor: runs in thread mode, using WFE/SEV
-    let executor = EXECUTOR_LOW.put(Executor::new());
-    executor.run(|spawner| {
-        spawner.spawn(main_task()).unwrap();
-    });
+    /*
+    {
+        let executor = EXECUTOR_LOW.put(Executor::new());
+        executor.run(|spawner| {
+            spawner.spawn(main_task()).unwrap();
+        });
+    }
+    */
 }
 
 // Wrap main(), otherwise auto-completion with rust-analyzer doesn't work.
 #[cortex_m_rt::entry]
 fn main_() -> ! { main() }
+
+
+/*
+    fn lvgl_init(display: RawDisplay) -> (Lvgl, Display<RawDisplay>, InputDevice<TouchPad>) {
+        let mut lvgl = Lvgl::new();
+
+        // Register logger
+        lvgl.register_logger(|s| rtt_target::rprint!(s));
+
+        static mut DRAW_BUFFER: [MaybeUninit<Rgb565>; LVGL_BUFFER_LEN] =
+            [MaybeUninit::<Rgb565>::uninit(); LVGL_BUFFER_LEN];
+
+        let mut display = Display::new(&lvgl, display, unsafe { &mut DRAW_BUFFER });
+
+        let input_device = lvgl::core::InputDevice::<TouchPad>::new(&mut display);
+
+        (lvgl, display, input_device)
+    }
+*/
 
 
 /*

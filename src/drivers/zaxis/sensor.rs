@@ -6,7 +6,7 @@ use stm32f1xx_hal::{
     gpio::gpiob::*,
 };
 
-use crate::debug;
+//use crate::debug;
 use super::prelude::*;
 use super::motion_control::MotionControl;
 

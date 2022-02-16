@@ -1,23 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use stm32f1xx_hal::{
-    prelude::*,
-    gpio::*,
-    gpio::gpioa::*,
-    gpio::gpioc::*,
-    gpio::gpiod::*,
-    gpio::gpioe::*,
-    //pac::Peripherals,
-    //rcc::{Clocks, APB1},
-    delay::Delay,
-    pac::{self, FSMC},
-};
+use embassy_stm32::exti::ExtiInput;
+use embassy_stm32::gpio::low_level::AFType;
+use embassy_stm32::peripherals as p;
+use embassy_stm32::gpio::{Level, Input, Output, Speed, Pull};
+use embassy::time::{Duration, Timer};
 
 use crate::consts::display::*;
 
 pub struct Display {
-    pub reset: PC6<Output<PushPull>>,
-    pub backlight: PA10<Output<PushPull>>,
+    pub reset: Output<'static, p::PC6>,
+    pub backlight: Output<'static, p::PA10>,
 }
 
 impl Display {
@@ -35,76 +28,74 @@ impl Display {
     */
 
     pub fn new(
-        reset: PC6<Input<Floating>>,
-        backlight: PA10<Input<Floating>>,
+        reset: p::PC6,
+        backlight: p::PA10,
 
-        output_enable: PD4<Input<Floating>>,
-        write_enable: PD5<Input<Floating>>,
-        cs: PD7<Input<Floating>>,
-        a16: PD11<Input<Floating>>,
+        output_enable: p::PD4,
+        write_enable: p::PD5,
+        cs: p::PD7,
+        a16: p::PD11,
 
-        d0: PD14<Input<Floating>>,
-        d1: PD15<Input<Floating>>,
-        d2: PD0<Input<Floating>>,
-        d3: PD1<Input<Floating>>,
-        d4: PE7<Input<Floating>>,
-        d5: PE8<Input<Floating>>,
-        d6: PE9<Input<Floating>>,
-        d7: PE10<Input<Floating>>,
-        d8: PE11<Input<Floating>>,
-        d9: PE12<Input<Floating>>,
-        d10: PE13<Input<Floating>>,
-        d11: PE14<Input<Floating>>,
-        d12: PE15<Input<Floating>>,
-        d13: PD8<Input<Floating>>,
-        d14: PD9<Input<Floating>>,
-        d15: PD10<Input<Floating>>,
+        d0: p::PD14,
+        d1: p::PD15,
+        d2: p::PD0,
+        d3: p::PD1,
+        d4: p::PE7,
+        d5: p::PE8,
+        d6: p::PE9,
+        d7: p::PE10,
+        d8: p::PE11,
+        d9: p::PE12,
+        d10: p::PE13,
+        d11: p::PE14,
+        d12: p::PE15,
+        d13: p::PD8,
+        d14: p::PD9,
+        d15: p::PD10,
 
-        fsmc: FSMC,
-
-        gpioa_crh: &mut Cr<CRH, 'A'>,
-        gpioc_crl: &mut Cr<CRL, 'C'>,
-        gpiod_crl: &mut Cr<CRL, 'D'>,
-        gpiod_crh: &mut Cr<CRH, 'D'>,
-        gpioe_crl: &mut Cr<CRL, 'E'>,
-        gpioe_crh: &mut Cr<CRH, 'E'>,
+        //fsmc: p::FSMC,
     ) -> Self {
+        let reset = Output::new(reset, Level::Low, Speed::Low);
+        let backlight = Output::new(backlight, Level::Low, Speed::Low);
 
-        let reset = reset.into_push_pull_output(gpioc_crl);
-        let backlight = backlight.into_push_pull_output(gpioa_crh);
-
+        /*
         unsafe {
-            // Enables the EXMC module
+            // embassy-stm32 doesn't implement the FSCM module.
+            // We do a pretty big hack here, it's faster.
+
+            use stm32f1xx_hal::pac::{self, FSMC};
+            use embassy_stm32::gpio::low_level::Pin;
+
+            // PD4: EXMC_NOE: Output Enable
+            output_enable.set_as_af(0, AFType::OutputPushPull);
+            // PD5: EXMC_NWE: Write enable
+            write_enable.set_as_af(0, AFType::OutputPushPull);
+            // PD7: EXMC_NE0: Chip select
+            cs.set_as_af(0, AFType::OutputPushPull);
+            // A16: Selects the Command or Data register
+            a16.set_as_af(0, AFType::OutputPushPull);
+
+            d0.set_as_af(0, AFType::OutputPushPull);
+            d1.set_as_af(0, AFType::OutputPushPull);
+            d2.set_as_af(0, AFType::OutputPushPull);
+            d3.set_as_af(0, AFType::OutputPushPull);
+            d4.set_as_af(0, AFType::OutputPushPull);
+            d5.set_as_af(0, AFType::OutputPushPull);
+            d6.set_as_af(0, AFType::OutputPushPull);
+            d7.set_as_af(0, AFType::OutputPushPull);
+            d8.set_as_af(0, AFType::OutputPushPull);
+            d9.set_as_af(0, AFType::OutputPushPull);
+            d10.set_as_af(0, AFType::OutputPushPull);
+            d11.set_as_af(0, AFType::OutputPushPull);
+            d12.set_as_af(0, AFType::OutputPushPull);
+            d13.set_as_af(0, AFType::OutputPushPull);
+            d14.set_as_af(0, AFType::OutputPushPull);
+            d15.set_as_af(0, AFType::OutputPushPull);
+
+            // Enables the FSMC module
             (*pac::RCC::ptr()).ahbenr.modify(|_,w| w.bits(1 << 8));
-        }
+            let fsmc = &*pac::FSMC::ptr();
 
-        // PD4: EXMC_NOE: Output Enable
-        output_enable.into_alternate_push_pull(gpiod_crl);
-        // PD5: EXMC_NWE: Write enable
-        write_enable.into_alternate_push_pull(gpiod_crl);
-        // PD7: EXMC_NE0: Chip select
-        cs.into_alternate_push_pull(gpiod_crl);
-        // A16: Selects the Command or Data register
-        a16.into_alternate_push_pull(gpiod_crh);
-
-        d0.into_alternate_push_pull(gpiod_crh);
-        d1.into_alternate_push_pull(gpiod_crh);
-        d2.into_alternate_push_pull(gpiod_crl);
-        d3.into_alternate_push_pull(gpiod_crl);
-        d4.into_alternate_push_pull(gpioe_crl);
-        d5.into_alternate_push_pull(gpioe_crh);
-        d6.into_alternate_push_pull(gpioe_crh);
-        d7.into_alternate_push_pull(gpioe_crh);
-        d8.into_alternate_push_pull(gpioe_crh);
-        d9.into_alternate_push_pull(gpioe_crh);
-        d10.into_alternate_push_pull(gpioe_crh);
-        d11.into_alternate_push_pull(gpioe_crh);
-        d12.into_alternate_push_pull(gpioe_crh);
-        d13.into_alternate_push_pull(gpiod_crh);
-        d14.into_alternate_push_pull(gpiod_crh);
-        d15.into_alternate_push_pull(gpiod_crh);
-
-        unsafe {
             fsmc.bcr1.write(|w| w
                 // Enable NOR Bank 0
                 .mbken().set_bit()
@@ -125,6 +116,7 @@ impl Display {
                 .datlat().bits(2)
             );
         }
+        */
 
         Self { reset, backlight }
     }
@@ -137,15 +129,15 @@ impl Display {
         unsafe { Self::TFT_DATA.write_volatile(v); }
     }
 
-    pub fn init(&mut self, delay: &mut Delay) {
+    pub fn init(&mut self) {
         // This sequence is mostly taken from the original firmware
-        delay.delay_ms(10u8);
+        delay_ms(10);
         self.reset.set_high();
-        delay.delay_ms(10u8);
+        delay_ms(10);
         self.reset.set_low();
-        delay.delay_ms(80u8);
+        delay_ms(80);
         self.reset.set_high();
-        delay.delay_ms(50u8);
+        delay_ms(50);
 
         self.cmd(0xCF, &[0x00, 0xC1, 0x30]);
         self.cmd(0xED, &[0x64, 0x03, 0x12, 0x81]);
@@ -171,15 +163,15 @@ impl Display {
 
         // Sleep Out
         self.cmd(0x11, &[]);
-        delay.delay_ms(8u8);
+        delay_ms(8);
 
         // Display ON
         self.cmd(0x29, &[]);
-        delay.delay_ms(1u8);
+        delay_ms(1);
 
         self.fill_screen(0);
 
-        delay.delay_ms(110u32);
+        delay_ms(110u32);
     }
 
     pub fn write_data_as_two_u8(&mut self, v: u16) {
@@ -264,6 +256,8 @@ use embedded_graphics::{
     pixelcolor::{Rgb565, raw::RawU16},
     primitives::Rectangle,
 };
+
+use super::clock::delay_ms;
 
 impl DrawTarget for Display {
     type Color = Rgb565;

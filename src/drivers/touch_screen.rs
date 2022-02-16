@@ -13,7 +13,6 @@ use embassy::time::{Duration, Timer};
 const PRESSURE_SCALE: u16 = 32;
 const PRESSURE_THRESHOLD_VALUE: u16 = (PRESSURE_SCALE as f32 * PRESSURE_THRESHOLD) as u16;
 
-
 // There's an application note that can be useful to follow for getting good
 // results https://www.ti.com/lit/an/sbaa036/sbaa036.pdf
 
