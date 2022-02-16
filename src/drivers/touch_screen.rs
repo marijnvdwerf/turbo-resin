@@ -53,18 +53,21 @@ impl TouchScreen {
 
     pub async fn get_next_touch_event(&mut self) -> Option<TouchEvent> {
         loop {
-            if self.had_touch_event && !self.device.is_touch_detected() {
-                self.had_touch_event = false;
-                return None
+            {
+                // We do the had_touch_event check after we register the wait
+                // for touch future. This is so we avoid a race when checking
+                // for the touch detection to return the None event, and
+                // blocking in wait_for_touch_detected.
+                let touch_detected_fut = self.device.wait_for_touch_detected();
+                futures::pin_mut!(touch_detected_fut);
+                if futures::poll!(&mut touch_detected_fut).is_pending() {
+                    if self.had_touch_event {
+                        self.had_touch_event = false;
+                        return None
+                    }
+                    touch_detected_fut.await;
+                }
             }
-
-            // FIXME this is racy. But we'd need a better EXTI API.
-            // By the time we are checking `if self.had_touch_event && !self.device.is_touch_detected()`
-            // to return a release event (None), assume "touch_detected" is true.
-            // The "touch_detected" could turn false right after, and so
-            // wait_for_touch_detected will block. And we'll never send that None event.
-
-            self.device.wait_for_touch_detected().await;
 
             if let Some(touch_event) = self.get_stable_sample().await {
                 self.had_touch_event = true;

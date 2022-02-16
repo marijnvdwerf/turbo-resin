@@ -108,6 +108,10 @@ static LAST_TOUCH_EVENT: Mutex<RefCell<Option<TouchEvent>>> = Mutex::new(RefCell
 async fn touch_screen_task(mut touch_screen: TouchScreen) {
     loop {
         let touch_event = touch_screen.get_next_touch_event().await;
+        // What should happen if lvgl is not pumping click events fast enought?
+        // We have different solutions. But here we go with last event wins.
+        // If we had a keyboard, we would queue up events to avoid loosing key
+        // presses.
         LAST_TOUCH_EVENT.lock(|e| *e.borrow_mut() = touch_event);
     }
 }
@@ -205,6 +209,14 @@ fn main() -> ! {
         spawner.spawn(run_high());
     });
     */
+
+    {
+        // High priority task: the stepper motor.
+        let irq = interrupt::take!(TIM7);
+        irq.set_priority(interrupt::Priority::P6);
+        irq.set_handler_context()
+        //irq.set_handler()
+    }
 
     // Medium priority executor
     {
