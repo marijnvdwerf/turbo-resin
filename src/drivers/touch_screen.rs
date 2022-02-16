@@ -58,6 +58,12 @@ impl TouchScreen {
                 return None
             }
 
+            // FIXME this is racy. But we'd need a better EXTI API.
+            // By the time we are checking `if self.had_touch_event && !self.device.is_touch_detected()`
+            // to return a release event (None), we could still have "touch_detected" to be true.
+            // The "touch_detected" could turn false right before we get into wait_for_touch_detected().
+            // And we'll never send that None event.
+
             self.device.wait_for_touch_detected().await;
 
             if let Some(touch_event) = self.get_stable_sample().await {
