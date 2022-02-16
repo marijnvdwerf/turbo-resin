@@ -19,6 +19,12 @@ embedded-graphics = "0.7"
 embedded-graphics-core = "0.3"
 nb = "1"
 lvgl = { git = "https://github.com/nviennot/lvgl-rs.git", features =["logger", "lvgl_alloc"] }
+#futures = { version = "0.3", default-features = false, features=["executor"] }
+futures = { version = "0.3", default-features = false, features = ["async-await"] }
+
+embassy = { path = "embassy/embassy" }
+embassy-stm32 = { path = "embassy/embassy-stm32", features= ["nightly", "stm32f107rc", "unstable-pac", "time-driver-tim3", "exti"] }
+
 
 #arrayvec = {version = "0.7", default-features = false }
 #cty = "0.2"

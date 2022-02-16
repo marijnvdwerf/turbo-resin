@@ -61,9 +61,9 @@ pub mod touch_screen {
     // Under light touch, pressure == 6.0
     pub const PRESSURE_THRESHOLD: f32 = 5.0;
 
-    // Number of consequtive samples to validate
     pub const STABLE_X_Y_VALUE_TOLERANCE: u16 = 8; // in pixels
+    // Number of consequtive samples to validate
     pub const NUM_STABLE_SAMPLES: u8 = 8;
-    pub const DEBOUNCE_INT_DELAY_MS: u8 = 1;
-    pub const SAMPLE_DELAY_MS: u8 = 1;
+    pub const DEBOUNCE_INTERRUPT_DELAY_MS: u64 = 1;
+    pub const SAMPLE_DELAY_MS: u64 = 1;
 }

@@ -31,7 +31,7 @@ pub mod prelude {
 pub struct Machine {
     pub ext_flash: ExtFlash,
     pub display: Display,
-    pub touch_screen: TouchScreen,
+    //pub touch_screen: TouchScreen,
     pub stepper: MotionControl,
     pub systick: Systick,
     pub lcd: Lcd,
@@ -94,10 +94,12 @@ impl Machine {
         //  Touch screen
         //--------------------------
 
+        /*
         let touch_screen = TouchScreen::new(
             gpioc.pc7, gpioc.pc8, gpioc.pc9, gpioa.pa8, gpioa.pa9,
             &mut gpioa.crh, &mut gpioc.crl, &mut gpioc.crh, &mut afio, &exti,
         );
+        */
 
         //--------------------------
         // LCD Panel
@@ -136,6 +138,6 @@ impl Machine {
         let syst = delay.free();
         let systick = Systick::new(syst, clocks.sysclk().0);
 
-        Self { ext_flash, display, touch_screen, stepper, lcd, z_bottom_sensor, systick }
+        Self { ext_flash, display, /*touch_screen,*/ stepper, lcd, z_bottom_sensor, systick }
     }
 }

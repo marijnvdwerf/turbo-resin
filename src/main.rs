@@ -5,6 +5,7 @@
 #![feature(alloc_error_handler)]
 #![feature(int_abs_diff)]
 #![allow(unused_imports, dead_code, unused_variables, unused_macros, unreachable_code)]
+#![feature(type_alias_impl_trait)]
 
 #![feature(core_intrinsics)]
 
@@ -19,7 +20,7 @@ use consts::system::*;
 use consts::display::*;
 use drivers::{
     machine::{Systick, Machine, prelude::*},
-    touch_screen::{TouchScreenResult, TouchEvent},
+    touch_screen::{TouchEvent, TouchScreen, ADS7846},
     display::Display as RawDisplay,
 
     zaxis::{
@@ -81,6 +82,100 @@ mod runtime {
     pub(crate) use debug;
 }
 
+
+use embassy::executor::Spawner;
+use embassy::time::{Duration, Timer};
+use embassy_stm32::time::Hertz;
+use embassy_stm32::Config;
+use embassy_stm32::Peripherals;
+use embassy::util::Forever;
+use embassy_stm32::interrupt;
+use embassy::executor::{Executor, InterruptExecutor};
+use embassy::interrupt::InterruptExt;
+use embassy_stm32::gpio::{Level, Output, Speed};
+
+#[embassy::task]
+async fn touch_screen_task(mut touch_screen: TouchScreen) {
+    loop {
+        let touch_event = touch_screen.get_next_touch_event().await;
+        debug!("touch_event: {:?}", touch_event);
+    }
+}
+
+#[embassy::task]
+async fn main_task() {
+    loop {
+
+    }
+}
+
+//static EXECUTOR_HIGH: Forever<InterruptExecutor<interrupt::UART4>> = Forever::new();
+static EXECUTOR_MED: Forever<InterruptExecutor<interrupt::UART5>> = Forever::new();
+static EXECUTOR_LOW: Forever<Executor> = Forever::new();
+
+fn main() -> ! {
+    rtt_target::rtt_init_print!();
+
+    let mut config = Config::default();
+    config.rcc.sys_ck = Some(Hertz(36_000_000));
+
+    // TIM3 is taken for time accounting. It's configurable in Cargo.toml
+    let p = embassy_stm32::init(config);
+
+    let touch_screen = TouchScreen::new(
+        ADS7846::new(p.PC7, p.PC8, p.PC9, p.PA8, p.PA9, p.EXTI9));
+
+
+
+    /*
+    // High-priority executor: SWI1_EGU1, priority level 6
+    let irq = interrupt::take!(UART4);
+    irq.set_priority(interrupt::Priority::P6);
+    let executor = EXECUTOR_HIGH.put(InterruptExecutor::new(irq));
+    executor.start(|spawner| {
+        spawner.spawn(run_high());
+    });
+    */
+
+    // Medium-priority executor: SWI0_EGU0, priority level 7
+    let irq = interrupt::take!(UART5);
+    irq.set_priority(interrupt::Priority::P7);
+    let executor = EXECUTOR_MED.put(InterruptExecutor::new(irq));
+    executor.start(|spawner| {
+        spawner.spawn(touch_screen_task(touch_screen)).unwrap();
+    });
+
+    // Low priority executor: runs in thread mode, using WFE/SEV
+    let executor = EXECUTOR_LOW.put(Executor::new());
+    executor.run(|spawner| {
+        spawner.spawn(main_task()).unwrap();
+    });
+}
+
+// Wrap main(), otherwise auto-completion with rust-analyzer doesn't work.
+#[cortex_m_rt::entry]
+fn main_() -> ! { main() }
+
+
+/*
+async fn main(spawner: Spawner, p: Peripherals) -> ! {
+    debug!("Running from embassy!");
+
+    let mut backlight = Output::new(p.PA10, Level::Low, Speed::Low);
+
+    loop {
+        debug!("high");
+        backlight.set_high();
+        Timer::after(Duration::from_millis(300)).await;
+
+        debug!("low");
+        backlight.set_low();
+        Timer::after(Duration::from_millis(300)).await;
+    }
+}
+*/
+
+/*
 #[rtic::app(
     device = stm32f1xx_hal::stm32, peripherals = true,
     // Picked random interrupts that we'll never use. RTIC will use this to schedule tasks.
@@ -234,6 +329,7 @@ mod app {
         }
     }
 }
+*/
 
 
     /*
