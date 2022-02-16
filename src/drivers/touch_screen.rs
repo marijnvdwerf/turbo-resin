@@ -16,8 +16,6 @@ const PRESSURE_THRESHOLD_VALUE: u16 = (PRESSURE_SCALE as f32 * PRESSURE_THRESHOL
 // There's an application note that can be useful to follow for getting good
 // results https://www.ti.com/lit/an/sbaa036/sbaa036.pdf
 
-pub struct TouchScreen(ADS7846);
-
 pub struct ADS7846 {
     cs: Output<'static, p::PC7>,
     sck: Output<'static, p::PC8>,
@@ -43,16 +41,27 @@ pub struct TouchEvent {
     pub z: u16,
 }
 
+pub struct TouchScreen {
+    device: ADS7846,
+    had_touch_event: bool,
+}
+
 impl TouchScreen {
     pub fn new(device: ADS7846) -> Self {
-        Self(device)
+        Self { device, had_touch_event: false }
     }
 
-    pub async fn get_next_touch_event(&mut self) -> TouchEvent {
+    pub async fn get_next_touch_event(&mut self) -> Option<TouchEvent> {
+        if self.had_touch_event && !self.device.is_touch_detected() {
+            self.had_touch_event = false;
+            return None
+        }
+
         loop {
-            self.0.wait_for_touch_detected().await;
+            self.device.wait_for_touch_detected().await;
             if let Some(touch_event) = self.get_stable_sample().await {
-                return touch_event;
+                self.had_touch_event = true;
+                return Some(touch_event);
             }
         }
     }
@@ -63,11 +72,11 @@ impl TouchScreen {
 
         loop {
             // The touch line should be active during the entirety of the sampling.
-            if !self.0.is_touch_detected() {
+            if !self.device.is_touch_detected() {
                 return None;
             }
 
-            let sample = self.0.read_packet().into();
+            let sample = self.device.read_packet().into();
             last_samples[(num_samples % NUM_STABLE_SAMPLES) as usize] = sample;
 
             // If we wrap, we will be in the same state as if we just received a pen

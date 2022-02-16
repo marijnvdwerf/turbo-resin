@@ -58,7 +58,6 @@ impl Display {
         let reset = Output::new(reset, Level::Low, Speed::Low);
         let backlight = Output::new(backlight, Level::Low, Speed::Low);
 
-        /*
         unsafe {
             // embassy-stm32 doesn't implement the FSCM module.
             // We do a pretty big hack here, it's faster.
@@ -116,7 +115,6 @@ impl Display {
                 .datlat().bits(2)
             );
         }
-        */
 
         Self { reset, backlight }
     }

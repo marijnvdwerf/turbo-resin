@@ -12,7 +12,7 @@ use gd32f3::gd32f307::{
     RCU,
 };
 
-pub fn setup_clock_120m_hxtal(_rcc: stm32f1xx_hal::pac::RCC) -> Clocks {
+pub fn setup_clock_120m_hxtal() -> Clocks {
     // Transcribed from the GD32F30x Firmware Library
 
     unsafe {

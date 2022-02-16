@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-/*
-use stm32f1xx_hal::{
-    prelude::*,
-    pac,
-    timer::Timer,
-    delay::Delay,
-};
-*/
+
+use stm32f1xx_hal as _;
 
 use crate::drivers::{
     ext_flash::ExtFlash,
@@ -24,14 +18,6 @@ use crate::drivers::{
 };
 
 use crate::consts::system::*;
-
-
-/*
-pub type Systick = systick_monotonic::Systick<{ SYSTICK_HZ }>;
-pub mod prelude {
-    pub use systick_monotonic::ExtU64;
-}
-*/
 
 pub struct Machine {
     //pub ext_flash: ExtFlash,
@@ -56,7 +42,7 @@ use embassy::interrupt::InterruptExt;
 use embassy_stm32::gpio::{Level, Output, Speed};
 
 impl Machine {
-    pub fn new(/*cp: cortex_m::Peripherals,*/ p: Peripherals) -> Self {
+    pub fn new(cp: cortex_m::Peripherals, p: Peripherals) -> Self {
         // Note, we can't use separate functions, because we are consuming (as
         // in taking ownership of) the device peripherals struct, and so we
         // cannot pass it as arguments to a function, as it would only be
@@ -67,8 +53,8 @@ impl Machine {
         //--------------------------
 
         // Can't use the HAL. The GD32 is too different.
-        //let clocks = clock::setup_clock_120m_hxtal(dp.RCC);
-        //clock::CycleCounter::new(cp.DWT).into_global();
+        //let clocks = clock::setup_clock_120m_hxtal();
+        clock::CycleCounter::new(cp.DWT).into_global();
 
         //--------------------------
         //  External flash
