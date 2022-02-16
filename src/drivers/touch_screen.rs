@@ -52,13 +52,14 @@ impl TouchScreen {
     }
 
     pub async fn get_next_touch_event(&mut self) -> Option<TouchEvent> {
-        if self.had_touch_event && !self.device.is_touch_detected() {
-            self.had_touch_event = false;
-            return None
-        }
-
         loop {
+            if self.had_touch_event && !self.device.is_touch_detected() {
+                self.had_touch_event = false;
+                return None
+            }
+
             self.device.wait_for_touch_detected().await;
+
             if let Some(touch_event) = self.get_stable_sample().await {
                 self.had_touch_event = true;
                 return Some(touch_event);

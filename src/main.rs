@@ -108,6 +108,7 @@ static LAST_TOUCH_EVENT: Mutex<RefCell<Option<TouchEvent>>> = Mutex::new(RefCell
 async fn touch_screen_task(mut touch_screen: TouchScreen) {
     loop {
         let touch_event = touch_screen.get_next_touch_event().await;
+        debug!("touch event: {:?}", touch_event);
         LAST_TOUCH_EVENT.lock(|e| *e.borrow_mut() = touch_event);
     }
 }
@@ -123,8 +124,21 @@ async fn lvgl_tick_task(mut lvgl_ticks: lvgl::core::Ticks) {
 #[embassy::task]
 async fn main_task() {
     loop {
+        //run_tasks();
 
     }
+}
+
+fn run_lvgl_tasks(lvgl: &mut Lvgl, lvgl_input_device: &mut InputDevice<TouchPad>) {
+    LAST_TOUCH_EVENT.lock(|e| {
+        *lvgl_input_device.state() = if let Some(e) = e.borrow().as_ref() {
+            TouchPad::Pressed { x: e.x as i16, y: e.y as i16 }
+        } else {
+            TouchPad::Released
+        };
+    });
+
+    lvgl.run_tasks();
 }
 
 fn lvgl_init(display: RawDisplay) -> (Lvgl, Display<RawDisplay>, InputDevice<TouchPad>) {
@@ -180,10 +194,7 @@ fn main() -> ! {
     //lvgl_tick_task::spawn().unwrap();
 
     let mut move_z_ui = ui::MoveZ::new(&display);
-    // Fill the display with something before turning it on.
     display.load_screen(&mut move_z_ui);
-    lvgl.run_tasks();
-    display.backlight.set_high();
 
     /*
     let irq = interrupt::take!(UART4);
@@ -206,26 +217,9 @@ fn main() -> ! {
     }
 
     loop {
-        LAST_TOUCH_EVENT.lock(|e| {
-            *lvgl_input_device.state() = if let Some(e) = e.borrow().as_ref() {
-                TouchPad::Pressed { x: e.x as i16, y: e.y as i16 }
-            } else {
-                TouchPad::Released
-            };
-        });
-
-        lvgl.run_tasks();
+        run_lvgl_tasks(&mut lvgl, &mut lvgl_input_device);
+        display.backlight.set_high();
     }
-
-    // Low priority executor: runs in thread mode, using WFE/SEV
-    /*
-    {
-        let executor = EXECUTOR_LOW.put(Executor::new());
-        executor.run(|spawner| {
-            spawner.spawn(main_task()).unwrap();
-        });
-    }
-    */
 }
 
 // Wrap main(), otherwise auto-completion with rust-analyzer doesn't work.
