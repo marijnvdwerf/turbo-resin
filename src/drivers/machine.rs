@@ -2,16 +2,13 @@
 
 
 use stm32f1xx_hal as _;
+use stm32f1xx_hal::timer::Timer;
 
 use crate::drivers::{
     ext_flash::ExtFlash,
     display::Display,
     touch_screen::TouchScreen,
-    zaxis::{
-        MotionControl,
-        BottomSensor,
-        Drv8424,
-    },
+    zaxis,
     lcd::Lcd,
     clock,
     touch_screen::*,
@@ -31,7 +28,7 @@ pub struct Machine {
 
 
 use embassy::executor::Spawner;
-use embassy::time::{Duration, Timer};
+//use embassy::time::{Duration, Timer};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::Config;
 use embassy_stm32::Peripherals;
@@ -41,8 +38,30 @@ use embassy::executor::{Executor, InterruptExecutor};
 use embassy::interrupt::InterruptExt;
 use embassy_stm32::gpio::{Level, Output, Speed};
 
+use stm32f1xx_hal::{
+    prelude::*,
+    pac,
+};
+
 impl Machine {
     pub fn new(cp: cortex_m::Peripherals, p: Peripherals) -> Self {
+        // Okay, so what we are doing is really sad. Embassy doesn't have well
+        // enough support for the things we need to do. For example running a
+        // PWM on PA3 is not implemented.
+        // So we are going to use both HALs. Embassy's and the usual one.
+
+        let dp = unsafe { stm32f1xx_hal::pac::Peripherals::steal() };
+        let mut gpioa = dp.GPIOA.split();
+        let mut gpiob = dp.GPIOB.split();
+        let mut gpioc = dp.GPIOC.split();
+        let mut gpiod = dp.GPIOD.split();
+        let mut gpioe = dp.GPIOE.split();
+
+        let mut afio = dp.AFIO.constrain();
+        let exti = dp.EXTI;
+        let clocks = super::clock::get_120mhz_clocks_config();
+
+
         // Note, we can't use separate functions, because we are consuming (as
         // in taking ownership of) the device peripherals struct, and so we
         // cannot pass it as arguments to a function, as it would only be
@@ -74,12 +93,13 @@ impl Machine {
 
         //let _notsure = gpioa.pa6.into_push_pull_output(&mut gpioa.crl);
         let mut display = Display::new(
-            p.PC6, p.PA10,
-            p.PD4, p.PD5, p.PD7, p.PD11,
-            p.PD14, p.PD15, p.PD0, p.PD1, p.PE7, p.PE8,
-            p.PE9, p.PE10, p.PE11, p.PE12, p.PE13,
-            p.PE14, p.PE15, p.PD8, p.PD9, p.PD10,
-            //p.FSMC
+            gpioc.pc6, gpioa.pa10,
+            gpiod.pd4, gpiod.pd5, gpiod.pd7, gpiod.pd11,
+            gpiod.pd14, gpiod.pd15, gpiod.pd0, gpiod.pd1, gpioe.pe7, gpioe.pe8,
+            gpioe.pe9, gpioe.pe10, gpioe.pe11, gpioe.pe12, gpioe.pe13,
+            gpioe.pe14, gpioe.pe15, gpiod.pd8, gpiod.pd9, gpiod.pd10,
+            dp.FSMC,
+            &mut gpioa.crh, &mut gpioc.crl, &mut gpiod.crl, &mut gpiod.crh, &mut gpioe.crl, &mut gpioe.crh,
         );
         display.init();
 
@@ -106,13 +126,15 @@ impl Machine {
         //  Stepper motor (Z-axis)
         //--------------------------
 
-        /*
         let (pa15, pb3, pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
 
-        // pb4 is used for TopSensor (or on Anycubic, it's the door sensor)
-        let z_bottom_sensor = BottomSensor::new(pb3, &mut gpiob.crl);
+        let zsensor = zaxis::BottomSensor::new(
+            pb3,
+            // pb4,
+            &mut gpiob.crl,
+        );
 
-        let drv8424 = Drv8424::new(
+        let drv8424 = zaxis::Drv8424::new(
             gpioe.pe4, gpioe.pe5, gpioe.pe6,
             gpioc.pc3, gpioc.pc0,
             gpioc.pc1, gpioc.pc2,
@@ -121,10 +143,7 @@ impl Machine {
             &mut gpioa.crl, gpioc.crl, &mut gpioe.crl, &mut afio.mapr,
         );
 
-        let stepper = MotionControl::new(drv8424, Timer::new(dp.TIM7, &clocks));
-
-         */
-
+        let stepper = zaxis::MotionControl::new(drv8424, Timer::new(dp.TIM7, &clocks));
 
         Self { display, touch_screen }
         //Self { ext_flash, /*display, touch_screen,*/ stepper, lcd, z_bottom_sensor, systick }

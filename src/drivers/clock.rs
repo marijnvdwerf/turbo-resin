@@ -82,38 +82,43 @@ pub fn setup_clock_120m_hxtal() -> Clocks {
             .adcpsc_1_0().bits(1) // APB2/4 clock
             .adcpsc_2().clear_bit()
         );
-
-        // The stm32 create has the Clocks struct, but all the fields are private.
-        // We are left doing this hack with transmuting memory.
-        // Not the safest thing, but good enough for now.
-        struct ClocksDup {
-            _hclk: Hertz,
-            _pclk1: Hertz,
-            _pclk2: Hertz,
-            _ppre1: u8,
-            _ppre2: u8,
-            _sysclk: Hertz,
-            _adcclk: Hertz,
-            _usbclk_valid: bool,
-        }
-
-        let clocks = ClocksDup {
-            _hclk: 120.mhz().into(),
-            _pclk1: 60.mhz().into(),
-            _pclk2: 120.mhz().into(),
-
-            _ppre1: 0, // TODO Not sure what's that is used for
-            _ppre2: 0, // TODO Not sure what's that is used for
-
-            _sysclk: 120.mhz().into(),
-            _adcclk: 30.mhz().into(),
-
-            _usbclk_valid: true,
-        };
-
-        core::mem::transmute(clocks)
     }
+
+    get_120mhz_clocks_config()
 }
+
+pub fn get_120mhz_clocks_config() -> Clocks {
+    // The stm32 create has the Clocks struct, but all the fields are private.
+    // We are left doing this hack with transmuting memory.
+    // Not the safest thing, but good enough for now.
+    struct ClocksDup {
+        _hclk: Hertz,
+        _pclk1: Hertz,
+        _pclk2: Hertz,
+        _ppre1: u8,
+        _ppre2: u8,
+        _sysclk: Hertz,
+        _adcclk: Hertz,
+        _usbclk_valid: bool,
+    }
+
+    let clocks = ClocksDup {
+        _hclk: 120.mhz().into(),
+        _pclk1: 60.mhz().into(),
+        _pclk2: 120.mhz().into(),
+
+        _ppre1: 0, // TODO Not sure what's that is used for
+        _ppre2: 0, // TODO Not sure what's that is used for
+
+        _sysclk: 120.mhz().into(),
+        _adcclk: 30.mhz().into(),
+
+        _usbclk_valid: true,
+    };
+
+    unsafe { core::mem::transmute(clocks) }
+}
+
 
 // 3 clock cycles is 25ns at 120MHz
 #[inline(always)]

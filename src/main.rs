@@ -160,10 +160,8 @@ fn main() -> ! {
     // Maximum priority for the motion control of the stepper motor.
     // as we need to deliver precise pulses with micro-second accuracy.
     {
-        let irq = interrupt::take!(TIM7);
+        let irq: interrupt::TIM7 = unsafe { ::core::mem::transmute(()) };
         irq.set_priority(interrupt::Priority::P5);
-        //irq.set_handler_context()
-        //irq.set_handler()
     }
 
     // High priority executor. Good for managing the printer. The print

@@ -136,6 +136,7 @@ impl MoveZ {
         })
     }
 
+    /*
     pub fn update(&mut self,
         stepper: &mut impl rtic::Mutex<T=MotionControl>,
         zsensor: &mut BottomSensor,
@@ -180,4 +181,5 @@ impl MoveZ {
             format!("Max speed: {:.2} mm/s\0", max_speed.as_mm()).as_bytes()
         ).unwrap());
     }
+    */
 }
