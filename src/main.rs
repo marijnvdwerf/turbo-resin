@@ -12,6 +12,7 @@
 mod drivers;
 mod consts;
 mod ui;
+mod util;
 
 use alloc::format;
 use lvgl::style::State;
@@ -24,10 +25,7 @@ use drivers::{
     touch_screen::{TouchEvent, TouchScreen, ADS7846},
     display::Display as RawDisplay,
 
-    zaxis::{
-        BottomSensor,
-        MotionControl,
-    }
+    zaxis,
 };
 
 use embedded_graphics::pixelcolor::Rgb565;
@@ -83,7 +81,11 @@ use embassy_stm32::gpio::{Level, Output, Speed};
 
 use embassy::blocking_mutex::CriticalSectionMutex as Mutex;
 
+use util::SharedWithInterrupt;
+
 static LAST_TOUCH_EVENT: Mutex<RefCell<Option<TouchEvent>>> = Mutex::new(RefCell::new(None));
+
+static Z_AXIS: Forever<SharedWithInterrupt<zaxis::MotionControl>> = Forever::new();
 
 #[embassy::task]
 async fn touch_screen_task(mut touch_screen: TouchScreen) {
@@ -102,13 +104,6 @@ async fn lvgl_tick_task(mut lvgl_ticks: lvgl::core::Ticks) {
     loop {
         lvgl_ticks.inc(1);
         Timer::after(Duration::from_millis(1)).await
-    }
-}
-
-#[embassy::task]
-async fn main_task() {
-    loop {
-        //run_tasks();
     }
 }
 
@@ -135,8 +130,10 @@ fn lvgl_init(display: RawDisplay) -> (Lvgl, Display<RawDisplay>) {
 }
 
 
-static EXECUTOR_HIGH: Forever<InterruptExecutor<interrupt::CAN1_RX0>> = Forever::new();
-static EXECUTOR_LOW: Forever<InterruptExecutor<interrupt::CAN1_RX1>> = Forever::new();
+#[interrupt]
+fn TIM7() {
+    unsafe { Z_AXIS.steal().lock_from_interrupt(|z| z.on_interrupt()) }
+}
 
 fn main() -> ! {
     rtt_target::rtt_init_print!();
@@ -174,6 +171,7 @@ fn main() -> ! {
     {
         let irq = interrupt::take!(CAN1_RX0);
         irq.set_priority(interrupt::Priority::P6);
+        static EXECUTOR_HIGH: Forever<InterruptExecutor<interrupt::CAN1_RX0>> = Forever::new();
         let executor = EXECUTOR_HIGH.put(InterruptExecutor::new(irq));
         executor.start(|spawner| {
             //spawner.spawn(run_high());
@@ -184,6 +182,7 @@ fn main() -> ! {
     {
         let irq = interrupt::take!(CAN1_RX1);
         irq.set_priority(interrupt::Priority::P7);
+        static EXECUTOR_LOW: Forever<InterruptExecutor<interrupt::CAN1_RX1>> = Forever::new();
         let executor = EXECUTOR_LOW.put(InterruptExecutor::new(irq));
         executor.start(|spawner| {
             spawner.spawn(touch_screen_task(touch_screen)).unwrap();

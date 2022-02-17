@@ -133,7 +133,10 @@ pub fn delay_ms(duration_ms: u32) {
 }
 
 
-static mut CYCLE_COUNTER_SINGLETON: Option<CycleCounter> = None;
+
+use embassy::util::Forever;
+
+static CYCLE_COUNTER: Forever<CycleCounter> = Forever::new();
 
 pub struct CycleCounter {
    dwt: DWT,
@@ -151,17 +154,13 @@ impl CycleCounter {
     }
 
     pub fn into_global(self) {
-        unsafe {
-            CYCLE_COUNTER_SINGLETON = Some(self);
-        }
+        CYCLE_COUNTER.put(self);
     }
 }
 
 #[inline(always)]
 pub fn read_cycles() -> u32 {
-    unsafe {
-        CYCLE_COUNTER_SINGLETON.as_ref().unwrap_unchecked().cycles()
-    }
+    unsafe { CYCLE_COUNTER.steal().cycles() }
 }
 
 
