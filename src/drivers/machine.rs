@@ -17,13 +17,12 @@ use crate::drivers::{
 use crate::consts::system::*;
 
 pub struct Machine {
-    //pub ext_flash: ExtFlash,
+    pub ext_flash: ExtFlash,
     pub display: Display,
     pub touch_screen: TouchScreen,
-    //pub stepper: MotionControl,
-    //pub systick: Systick,
-    //pub lcd: Lcd,
-    //pub z_bottom_sensor: BottomSensor,
+    pub stepper: zaxis::MotionControl,
+    pub lcd: Lcd,
+    pub z_bottom_sensor: zaxis::BottomSensor,
 }
 
 
@@ -79,13 +78,11 @@ impl Machine {
         //  External flash
         //--------------------------
 
-        /*
         let ext_flash = ExtFlash::new(
             gpiob.pb12, gpiob.pb13, gpiob.pb14, gpiob.pb15,
             dp.SPI2,
             &clocks, &mut gpiob.crh
         );
-        */
 
         //--------------------------
         //  TFT display
@@ -113,14 +110,12 @@ impl Machine {
         //--------------------------
         // LCD Panel
         //--------------------------
-        /*
         let lcd = Lcd::new(
             gpiod.pd12,
             gpioa.pa4, gpioa.pa5, gpioa.pa6, gpioa.pa7,
             dp.SPI1,
             &clocks, &mut gpioa.crl, &mut gpiod.crh, &mut afio.mapr,
         );
-        */
 
         //--------------------------
         //  Stepper motor (Z-axis)
@@ -128,7 +123,7 @@ impl Machine {
 
         let (pa15, pb3, pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
 
-        let zsensor = zaxis::BottomSensor::new(
+        let z_bottom_sensor = zaxis::BottomSensor::new(
             pb3,
             // pb4,
             &mut gpiob.crl,
@@ -145,7 +140,6 @@ impl Machine {
 
         let stepper = zaxis::MotionControl::new(drv8424, Timer::new(dp.TIM7, &clocks));
 
-        Self { display, touch_screen }
-        //Self { ext_flash, /*display, touch_screen,*/ stepper, lcd, z_bottom_sensor, systick }
+        Self { ext_flash, display, touch_screen, stepper, lcd, z_bottom_sensor }
     }
 }

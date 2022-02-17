@@ -135,16 +135,28 @@ fn TIM7() {
     unsafe { Z_AXIS.steal().lock_from_interrupt(|z| z.on_interrupt()) }
 }
 
+use embassy_stm32::time::U32Ext;
+
 fn main() -> ! {
     rtt_target::rtt_init_print!();
 
-    // FIXME this is broken right now. We need a proper HAL.
-    crate::drivers::clock::setup_clock_120m_hxtal();
+    let p = {
+        // We are doing the clock init here because of the gigadevice differences.
+        crate::drivers::clock::setup_clock_120m_hxtal();
+        let clk = embassy_stm32::rcc::Clocks {
+            sys: 120.mhz().into(),
+            apb1: 120.mhz().into(),
+            apb2: 60.mhz().into(),
+            apb1_tim: 120.mhz().into(),
+            apb2_tim: 60.mhz().into(),
+            ahb1: 120.mhz().into(),
+            adc: 30.mhz().into(),
+        };
+        unsafe { embassy_stm32::rcc::set_freqs(clk) };
 
-    // TIM3 is taken for time accounting. It's configurable in Cargo.toml
-    let mut config = Config::default();
-    config.rcc.sys_ck = Some(Hertz(36_000_000));
-    let p = embassy_stm32::init(config);
+        // Note: TIM3 is taken for time accounting. It's configurable in Cargo.toml
+        embassy_stm32::init(Config::default())
+    };
 
     let cp = cortex_m::Peripherals::take().unwrap();
     let machine = Machine::new(cp, p);
@@ -164,7 +176,7 @@ fn main() -> ! {
         irq.set_priority(interrupt::Priority::P5);
     }
 
-    // High priority executor. Good for managing the printer. The print
+    // High priority executor. Good for managing the printer. The main printing
     // algorithm is executed there. It interrupts the display rendering.
     {
         let irq = interrupt::take!(CAN1_RX0);
@@ -201,23 +213,3 @@ fn main() -> ! {
 // Wrap main(), otherwise auto-completion with rust-analyzer doesn't work.
 #[cortex_m_rt::entry]
 fn main_() -> ! { main() }
-
-
-
-/*
-mod app {
-    #[init]
-    #[task(priority = 5, binds = TIM7, shared = [stepper])]
-    fn stepper_interrupt(mut ctx: stepper_interrupt::Context) {
-        ctx.shared.stepper.lock(|s| s.on_interrupt());
-    }
-
-    #[task(priority = 3, local = [lvgl_ticks], shared = [])]
-    fn lvgl_tick_task(ctx: lvgl_tick_task::Context) {
-        // Not very precise (by the time we get here, some time has passed
-        // already), but good enough
-        lvgl_tick_task::spawn_after(1.millis()).unwrap();
-        ctx.local.lvgl_ticks.inc(1);
-    }
-}
-*/
