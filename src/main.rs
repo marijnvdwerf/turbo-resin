@@ -24,7 +24,6 @@ use drivers::{
     //machine::{Systick, Machine, prelude::*},
     touch_screen::{TouchEvent, TouchScreen, ADS7846},
     display::Display as RawDisplay,
-
     zaxis,
 };
 
@@ -36,12 +35,10 @@ use lvgl::core::{
 
 
 pub(crate) use runtime::debug;
-
 extern crate alloc;
 
 use core::cell::RefCell;
 use core::mem::MaybeUninit;
-
 use lvgl::core::Screen;
 
 mod runtime {
@@ -78,45 +75,99 @@ use embassy_stm32::interrupt;
 use embassy::executor::{Executor, InterruptExecutor};
 use embassy::interrupt::InterruptExt;
 use embassy_stm32::gpio::{Level, Output, Speed};
+use embassy::channel::signal::Signal;
+use embassy_stm32::time::U32Ext;
 
 use embassy::blocking_mutex::CriticalSectionMutex as Mutex;
 
 use util::SharedWithInterrupt;
 
 static LAST_TOUCH_EVENT: Mutex<RefCell<Option<TouchEvent>>> = Mutex::new(RefCell::new(None));
-
 static Z_AXIS: Forever<SharedWithInterrupt<zaxis::MotionControl>> = Forever::new();
 
-#[embassy::task]
-async fn touch_screen_task(mut touch_screen: TouchScreen) {
-    loop {
-        // What should happen if lvgl is not pumping click events fast enought?
-        // We have different solutions. But here we go with last event wins.
-        // If we had a keyboard, we would queue up events to avoid loosing key
-        // presses.
-        let touch_event = touch_screen.get_next_touch_event().await;
-        LAST_TOUCH_EVENT.lock(|e| *e.borrow_mut() = touch_event);
+static USER_ACTION: Signal<crate::ui::UserAction> = Signal::new();
+
+/// Maximum priority Tasks
+mod maximum_priority_tasks {
+    use super::*;
+
+    #[interrupt]
+    fn TIM7() {
+        unsafe { Z_AXIS.steal().lock_from_interrupt(|z| z.on_interrupt()) }
     }
 }
 
-#[embassy::task]
-async fn lvgl_tick_task(mut lvgl_ticks: lvgl::core::Ticks) {
-    loop {
-        lvgl_ticks.inc(1);
-        Timer::after(Duration::from_millis(1)).await
+mod high_priority_tasks {
+    use super::*;
+
+    #[embassy::task]
+    pub async fn touch_screen_task(mut touch_screen: TouchScreen) {
+        loop {
+            // What should happen if lvgl is not pumping click events fast enought?
+            // We have different solutions. But here we go with last event wins.
+            // If we had a keyboard, we would queue up events to avoid loosing key
+            // presses.
+            let touch_event = touch_screen.get_next_touch_event().await;
+            LAST_TOUCH_EVENT.lock(|e| *e.borrow_mut() = touch_event);
+        }
+    }
+
+    #[embassy::task]
+    pub async fn lvgl_tick_task(mut lvgl_ticks: lvgl::core::Ticks) {
+        loop {
+            lvgl_ticks.inc(1);
+            Timer::after(Duration::from_millis(1)).await
+        }
+    }
+
+    #[embassy::task]
+    pub async fn main_task(
+        zaxis: &'static SharedWithInterrupt<zaxis::MotionControl>,
+    ) {
+        // Here is the control center, coordinating the printer hardware.
+        // We react to user input, and do something with it.
+        loop {
+            let user_action = USER_ACTION.wait().await;
+            debug!("Executing user action: {:?}", user_action);
+            user_action.do_user_action(zaxis).await;
+            debug!("Done with user action");
+        }
     }
 }
 
-fn run_lvgl_tasks(lvgl: &mut Lvgl, lvgl_input_device: &mut InputDevice<TouchPad>) {
-    LAST_TOUCH_EVENT.lock(|e| {
-        *lvgl_input_device.state() = if let Some(e) = e.borrow().as_ref() {
-            TouchPad::Pressed { x: e.x as i16, y: e.y as i16 }
-        } else {
-            TouchPad::Released
-        };
-    });
+mod low_priority_tasks {
+    use super::*;
 
-    lvgl.run_tasks();
+    pub fn idle_task(
+        mut lvgl: Lvgl,
+        mut lvgl_input_device: InputDevice<TouchPad>,
+        mut display: Display<RawDisplay>,
+        mut ui: Screen<ui::MoveZ>,
+    ) -> ! {
+        loop {
+            let z_axis = unsafe { Z_AXIS.steal() };
+            let ui_state = z_axis.lock(|z_axis|
+                ui::UiState {
+                    zaxis_idle: z_axis.is_idle(),
+                    zaxis_current_position: z_axis.current_position,
+                    zaxis_max_speed: z_axis.get_max_speed(),
+                }
+            );
+            ui.context().as_mut().unwrap().update_ui(ui_state);
+
+            LAST_TOUCH_EVENT.lock(|e| {
+                *lvgl_input_device.state() = if let Some(e) = e.borrow().as_ref() {
+                    TouchPad::Pressed { x: e.x as i16, y: e.y as i16 }
+                } else {
+                    TouchPad::Released
+                };
+            });
+
+            lvgl.run_tasks();
+
+            display.backlight.set_high();
+        }
+    }
 }
 
 fn lvgl_init(display: RawDisplay) -> (Lvgl, Display<RawDisplay>) {
@@ -128,14 +179,6 @@ fn lvgl_init(display: RawDisplay) -> (Lvgl, Display<RawDisplay>) {
     let display = Display::new(&lvgl, display, unsafe { &mut DRAW_BUFFER });
     (lvgl, display)
 }
-
-
-#[interrupt]
-fn TIM7() {
-    unsafe { Z_AXIS.steal().lock_from_interrupt(|z| z.on_interrupt()) }
-}
-
-use embassy_stm32::time::U32Ext;
 
 fn main() -> ! {
     rtt_target::rtt_init_print!();
@@ -161,12 +204,13 @@ fn main() -> ! {
     let cp = cortex_m::Peripherals::take().unwrap();
     let machine = Machine::new(cp, p);
     let touch_screen = machine.touch_screen;
+    let zaxis: &'static _ = Z_AXIS.put(SharedWithInterrupt::new(machine.stepper));
 
-    let (mut lvgl, mut display) = lvgl_init(machine.display);
-    let mut lvgl_input_device = lvgl::core::InputDevice::<TouchPad>::new(&mut display);
+    let (lvgl, mut display) = lvgl_init(machine.display);
+    let lvgl_input_device = lvgl::core::InputDevice::<TouchPad>::new(&mut display);
     let lvgl_ticks = lvgl.ticks();
 
-    let mut move_z_ui = ui::MoveZ::new(&display);
+    let mut move_z_ui = ui::MoveZ::new(&display, &USER_ACTION);
     display.load_screen(&mut move_z_ui);
 
     // Maximum priority for the motion control of the stepper motor.
@@ -174,40 +218,25 @@ fn main() -> ! {
     {
         let irq: interrupt::TIM7 = unsafe { ::core::mem::transmute(()) };
         irq.set_priority(interrupt::Priority::P5);
+        irq.unpend();
+        irq.enable();
     }
 
-    // High priority executor. Good for managing the printer. The main printing
-    // algorithm is executed there. It interrupts the display rendering.
+    // High priority executor. It interrupts the low priority tasks (display rendering)
     {
         let irq = interrupt::take!(CAN1_RX0);
         irq.set_priority(interrupt::Priority::P6);
         static EXECUTOR_HIGH: Forever<InterruptExecutor<interrupt::CAN1_RX0>> = Forever::new();
         let executor = EXECUTOR_HIGH.put(InterruptExecutor::new(irq));
         executor.start(|spawner| {
-            //spawner.spawn(run_high());
+            spawner.spawn(high_priority_tasks::touch_screen_task(touch_screen)).unwrap();
+            spawner.spawn(high_priority_tasks::lvgl_tick_task(lvgl_ticks)).unwrap();
+            spawner.spawn(high_priority_tasks::main_task(zaxis)).unwrap();
         });
     }
 
-    // Low priority executor. Good for processing UI related tasks.
-    {
-        let irq = interrupt::take!(CAN1_RX1);
-        irq.set_priority(interrupt::Priority::P7);
-        static EXECUTOR_LOW: Forever<InterruptExecutor<interrupt::CAN1_RX1>> = Forever::new();
-        let executor = EXECUTOR_LOW.put(InterruptExecutor::new(irq));
-        executor.start(|spawner| {
-            spawner.spawn(touch_screen_task(touch_screen)).unwrap();
-            spawner.spawn(lvgl_tick_task(lvgl_ticks)).unwrap();
-        });
-    }
-
-    // This is the idle task.
-    // The non-interrupt context is busy drawing things to the display
-    // continuously. As we are not on a power-restricted device, we don't care
-    // about sleeping.
-    loop {
-        run_lvgl_tasks(&mut lvgl, &mut lvgl_input_device);
-        display.backlight.set_high();
-    }
+    // The idle task does UI drawing continuously.
+    low_priority_tasks::idle_task(lvgl, lvgl_input_device, display, move_z_ui)
 }
 
 // Wrap main(), otherwise auto-completion with rust-analyzer doesn't work.

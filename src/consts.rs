@@ -32,9 +32,11 @@ pub mod zaxis {
     pub mod stepper {
         // Here we go with a 1us timer. Precise enough for our purposes.
         pub const STEP_TIMER_FREQ: u32 = 1_000_000;
-        // It's not ideal to have small delay values because we'll lose precision on
-        // the speed requirements. Also, small delays means that we'll spend too
-        // much time spending CPU cycles stepping the motor.
+        // It's not ideal to have small delay values because we'll lose
+        // precision on the speed requirements. Also, small delays means that
+        // we'll spend too much time spending CPU cycles stepping the motor. Too
+        // large of a minimum delay value, and the stepper motor will have more
+        // chance to be noisy.
         pub const STEP_TIMER_MIN_DELAY_VALUE: f32 = 20.0;
     }
 

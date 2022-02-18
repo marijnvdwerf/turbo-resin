@@ -56,6 +56,8 @@ impl MotionControl {
     }
 
     pub fn on_interrupt(&mut self) {
+        self.step_timer.clear_update_interrupt_flag();
+
         let next_delay = self.do_step(|stepgen| {
             // We do some useful things while we wait for the 1us delay to pass
             // holding the STEP pin high.
@@ -82,19 +84,15 @@ impl MotionControl {
                 // sub(1) is because a value of arr=0 generates an interrupt every 1us.
                 ((delay_us + 0.5) as u16).saturating_sub(1)
             };
-            self.step_timer.set_arr(arr);
 
-            if self.step_timer.cnt() >= arr {
-                // If we have passed the delay we wanted, we need to do the next
-                // step immedately. This should never happen because
-                // MIN_DELAY_VALUE == 20, and we should have plenty of time to
-                // do our things.
-            } else {
-                self.step_timer.clear_update_interrupt_flag();
-            }
+            self.step_timer.set_arr(arr);
+            // Note: if cnt > arr at this point, an interrupt event is generated
+            // immediately. This is what we want.
+            // It should never happen because MIN_DELAY_VALUE == 20.
+            // This whole interrupt routine consumes at most 300 CPU cycles to run.
+            // That's 2.5us. We have a 10x margin.
         } else {
             self.stop();
-            self.step_timer.clear_update_interrupt_flag();
         }
     }
 
