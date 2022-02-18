@@ -24,7 +24,7 @@ pub mod zaxis {
     }
 
     pub mod motion_control {
-        pub const MAX_SPEED: f32 = 30.0; // mm/s
+        pub const MAX_SPEED: f32 = 20.0; // mm/s
         pub const MAX_ACCELERATION: f32 = 25.0; // mm/s^2
         pub const MAX_DECELERATION: f32 = 60.0; // mm/s^2
     }

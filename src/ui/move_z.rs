@@ -185,23 +185,24 @@ pub enum UserAction {
 }
 
 impl UserAction {
-    pub async fn do_user_action(&self, zaxis: &SharedWithInterrupt<zaxis::MotionControl>) {
+    pub async fn do_user_action(&self, mc: &mut zaxis::MotionControlAsync) {
         match self {
             UserAction::MoveUp => {
-                zaxis.lock(|s| s.set_target_relative(40.0.mm()));
+                mc.set_target_relative(40.0.mm());
             },
             UserAction::MoveDown => {
-                zaxis.lock(|s| s.set_target_relative((-40.0).mm()));
+                mc.set_target_relative((-40.0).mm());
             }
             UserAction::StopRequested => {
-                zaxis.lock(|s| s.controlled_stop());
+                mc.controlled_stop();
             }
             UserAction::SetSpeed(v) => {
-                zaxis.lock(|s| s.set_max_speed(v.mm()))
+                mc.set_max_speed(v.mm());
             },
             UserAction::Calibrate => {
-                zaxis.lock(|s| s.set_target_relative(10.0.mm()));
-                //zsensor.calibrate(stepper);
+                zaxis::calibrate_origin(mc).await;
+                mc.set_max_speed(MAX_SPEED.mm());
+                mc.set_target(0.0.mm());
             }
         }
    }

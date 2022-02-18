@@ -14,5 +14,8 @@ mod distance;
 pub use distance::*;
 pub use distance::prelude;
 
-mod homing;
-pub use homing::*;
+mod origin;
+pub use origin::*;
+
+mod motion_control_async;
+pub use motion_control_async::*;

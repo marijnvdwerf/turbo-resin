@@ -136,7 +136,7 @@ impl Drv8424 {
         }
     }
 
-    pub fn current_direction(&self) -> Direction {
+    pub fn get_direction(&self) -> Direction {
         match self.dir.is_set_high() {
             true  => Direction::Up,
             false => Direction::Down,

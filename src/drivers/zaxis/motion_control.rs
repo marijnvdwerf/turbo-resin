@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use embassy::channel::signal::Signal;
 use stm32f1xx_hal::{
     prelude::*,
     gpio::*,
@@ -32,8 +33,8 @@ pub struct MotionControl {
     drv8424: Drv8424,
     step_timer: CountDownTimer<TIM7>,
     stepgen: StepGenerator,
-    pub current_position: Steps,
-    pub target: Steps,
+    current_position: Steps,
+    target: Steps,
 }
 
 impl MotionControl {
@@ -97,6 +98,10 @@ impl MotionControl {
         Steps(self.stepgen.get_max_speed() as i32)
     }
 
+    pub fn get_current_position(&self) -> Steps {
+        self.current_position
+    }
+
     // relative to current position
     pub fn set_target_relative(&mut self, steps: Steps) {
         self.set_target(self.current_position + steps);
@@ -123,8 +128,8 @@ impl MotionControl {
         // steps-1 because we are going to do the first step immedately.
         self.stepgen.set_remaining_steps(steps-1);
 
-        // We need to hold the enable pin high for 5us before we can start stepping the motor.
-
+        // We need to hold the enable pin high for 5us before we can start
+        // stepping the motor. That's from the DRV8424 datasheet.
         self.step_timer.set_arr(5);
         self.step_timer.reset();
 
@@ -159,7 +164,7 @@ impl MotionControl {
         let stepgen = &mut self.stepgen;
 
         self.drv8424.do_step(|drv| {
-            match drv.current_direction() {
+            match drv.get_direction() {
                 Direction::Up   => current_position.0 += drv.step_multiplier as i32,
                 Direction::Down => current_position.0 -= drv.step_multiplier as i32,
             }

@@ -83,7 +83,7 @@ use embassy::blocking_mutex::CriticalSectionMutex as Mutex;
 use util::SharedWithInterrupt;
 
 static LAST_TOUCH_EVENT: Mutex<RefCell<Option<TouchEvent>>> = Mutex::new(RefCell::new(None));
-static Z_AXIS: Forever<SharedWithInterrupt<zaxis::MotionControl>> = Forever::new();
+static Z_AXIS: Forever<zaxis::MotionControlAsync> = Forever::new();
 
 static USER_ACTION: Signal<crate::ui::UserAction> = Signal::new();
 
@@ -93,7 +93,7 @@ mod maximum_priority_tasks {
 
     #[interrupt]
     fn TIM7() {
-        unsafe { Z_AXIS.steal().lock_from_interrupt(|z| z.on_interrupt()) }
+        unsafe { Z_AXIS.steal().on_interrupt() }
     }
 }
 
@@ -122,14 +122,20 @@ mod high_priority_tasks {
 
     #[embassy::task]
     pub async fn main_task(
-        zaxis: &'static SharedWithInterrupt<zaxis::MotionControl>,
+        //zaxis: &'static SharedWithInterrupt<zaxis::MotionControl>,
+        //zaxis: &'static mut zaxis::MotionControlAsync,
     ) {
+        let z_axis = unsafe { Z_AXIS.steal() };
         // Here is the control center, coordinating the printer hardware.
         // We react to user input, and do something with it.
         loop {
             let user_action = USER_ACTION.wait().await;
             debug!("Executing user action: {:?}", user_action);
-            user_action.do_user_action(zaxis).await;
+            let action_fut = user_action.do_user_action(z_axis);
+            // Start the action.
+            //futures::pin_mut!(action_fut);
+            //futures::poll!(action_fut);
+            action_fut.await;
             debug!("Done with user action");
         }
     }
@@ -146,13 +152,20 @@ mod low_priority_tasks {
     ) -> ! {
         loop {
             let z_axis = unsafe { Z_AXIS.steal() };
+            /*
             let ui_state = z_axis.lock(|z_axis|
                 ui::UiState {
                     zaxis_idle: z_axis.is_idle(),
-                    zaxis_current_position: z_axis.current_position,
+                    zaxis_current_position: z_axis.get_current_position(),
                     zaxis_max_speed: z_axis.get_max_speed(),
                 }
             );
+            */
+            let ui_state = ui::UiState {
+                zaxis_idle: z_axis.is_idle(),
+                zaxis_current_position: z_axis.get_current_position(),
+                zaxis_max_speed: z_axis.get_max_speed(),
+            };
             ui.context().as_mut().unwrap().update_ui(ui_state);
 
             LAST_TOUCH_EVENT.lock(|e| {
@@ -204,7 +217,9 @@ fn main() -> ! {
     let cp = cortex_m::Peripherals::take().unwrap();
     let machine = Machine::new(cp, p);
     let touch_screen = machine.touch_screen;
-    let zaxis: &'static _ = Z_AXIS.put(SharedWithInterrupt::new(machine.stepper));
+    let zaxis = zaxis::MotionControlAsync::new(SharedWithInterrupt::new(machine.stepper), machine.z_bottom_sensor);
+    Z_AXIS.put(zaxis);
+    //let zaxis: &'static mut _ = Z_AXIS.put(zaxis);
 
     let (lvgl, mut display) = lvgl_init(machine.display);
     let lvgl_input_device = lvgl::core::InputDevice::<TouchPad>::new(&mut display);
@@ -231,7 +246,7 @@ fn main() -> ! {
         executor.start(|spawner| {
             spawner.spawn(high_priority_tasks::touch_screen_task(touch_screen)).unwrap();
             spawner.spawn(high_priority_tasks::lvgl_tick_task(lvgl_ticks)).unwrap();
-            spawner.spawn(high_priority_tasks::main_task(zaxis)).unwrap();
+            spawner.spawn(high_priority_tasks::main_task()).unwrap();
         });
     }
 
