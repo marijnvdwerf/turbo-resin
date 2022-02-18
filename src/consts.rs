@@ -37,7 +37,8 @@ pub mod zaxis {
         // we'll spend too much time spending CPU cycles stepping the motor. Too
         // large of a minimum delay value, and the stepper motor will have more
         // chance to be noisy.
-        pub const STEP_TIMER_MIN_DELAY_VALUE: f32 = 20.0;
+        // With 15 minimal delay value, we get a 0.5/15 = 3% speed error at most.
+        pub const STEP_TIMER_MIN_DELAY_VALUE: f32 = 15.0;
     }
 
     pub mod homing {

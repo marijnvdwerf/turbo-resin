@@ -12,6 +12,10 @@ use crate::consts::zaxis::{
 
 const TIMER_FREQ: f32 = STEP_TIMER_FREQ as f32;
 const MAX_STEP_MULTIPLIER: u32 = DRIVER_MICROSTEPS;
+// MIN_DELAY_VALUE is most of the time respected. It can be that for a single
+// step, the delay is going to be smaller, but immediately after, the step
+// multiplier will be corrected.
+// We could do a better implementation.
 const MIN_DELAY_VALUE: f32 = STEP_TIMER_MIN_DELAY_VALUE;
 
 // The DRV8424 doesn't allow 1/64 microstepping because of the pin configuration
@@ -97,10 +101,13 @@ impl StepGenerator {
         let ci = self.ci;
         let effective_ci = ci*(m as f32);
 
+        let increase_rate = if m*2 == FORBIDDEN_MULTIPLIER { 4 } else { 2 };
+        let decrease_rate = if m/2 == FORBIDDEN_MULTIPLIER { 4 } else { 2 };
+
         if self.n == 0 {
             self.step_multiplier = 1;
         } else if self.remaining_steps < self.step_multiplier {
-            self.step_multiplier /= 2;
+            self.step_multiplier /= decrease_rate;
         } else if effective_ci < MIN_DELAY_VALUE && m != MAX_STEP_MULTIPLIER {
             // If the delay value becomes too small, we won't be able to keep up
             // sending pulses fast enough. We must rise the step multiplier.
@@ -111,11 +118,15 @@ impl StepGenerator {
             // Also we assume that the caller does a single step before invoking
             // the first next() call, hence the +1. It doesn't really change much,
             // a 1/256 microstep is so small.
-            if (self.n+1) % (m*2) == 0 {
-               self.step_multiplier *= 2;
+            let next_multiplier = m*increase_rate;
+            if (self.n+1) % next_multiplier == 0 {
+               self.step_multiplier = next_multiplier;
             }
-        } else if m != 1 && effective_ci > MIN_DELAY_VALUE*2.1 {
-               self.step_multiplier /= 2;
+        } else if m != 1 && effective_ci > MIN_DELAY_VALUE*(decrease_rate as f32) + 0.01 {
+            // We add 0.01 to the condition to avoid flip flopping between two
+            // multipliers because of potential rounding errors. This condition
+            // hasn't been verified, I'm just being paranoid.
+            self.step_multiplier /= decrease_rate;
         }
     }
 }

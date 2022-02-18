@@ -67,15 +67,7 @@ impl MotionControl {
         });
 
         if let Some((delay_us, multiplier)) = next_delay {
-            if multiplier == 4 {
-                // We don't have access ot the multiplier 4 (1/64 microstepping).
-                // We'll do two steps at multiplier 2. Not really ideal, but good enough.
-                self.drv8424.set_step_multiplier(2);
-                delay_ns(1000);
-                self.do_step(|_| delay_ns(1000));
-            } else {
-                self.drv8424.set_step_multiplier(multiplier);
-            }
+            self.drv8424.set_step_multiplier(multiplier);
 
             let arr = if delay_us >= u16::MAX as f32 {
                 u16::MAX
@@ -88,9 +80,9 @@ impl MotionControl {
             self.step_timer.set_arr(arr);
             // Note: if cnt > arr at this point, an interrupt event is generated
             // immediately. This is what we want.
-            // It should never happen because MIN_DELAY_VALUE == 20.
-            // This whole interrupt routine consumes at most 300 CPU cycles to run.
-            // That's 2.5us.
+            // But it should not happen because MIN_DELAY_VALUE == 15.
+            // This whole interrupt routine takes at most 300 CPU cycles to run.
+            // That's 2.5us. That's a x6 margin.
         } else {
             self.stop();
         }
