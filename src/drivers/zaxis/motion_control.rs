@@ -90,7 +90,7 @@ impl MotionControl {
             // immediately. This is what we want.
             // It should never happen because MIN_DELAY_VALUE == 20.
             // This whole interrupt routine consumes at most 300 CPU cycles to run.
-            // That's 2.5us. We have a 10x margin.
+            // That's 2.5us.
         } else {
             self.stop();
         }

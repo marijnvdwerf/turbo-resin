@@ -14,6 +14,9 @@ const TIMER_FREQ: f32 = STEP_TIMER_FREQ as f32;
 const MAX_STEP_MULTIPLIER: u32 = DRIVER_MICROSTEPS;
 const MIN_DELAY_VALUE: f32 = STEP_TIMER_MIN_DELAY_VALUE;
 
+// The DRV8424 doesn't allow 1/64 microstepping because of the pin configuration
+const FORBIDDEN_MULTIPLIER: u32 = 4;
+
 pub struct StepGenerator {
     ra: f32, // acceleration constant like in the paper
     rd: f32, // deceleration constant like in the paper
@@ -108,10 +111,10 @@ impl StepGenerator {
             // Also we assume that the caller does a single step before invoking
             // the first next() call, hence the +1. It doesn't really change much,
             // a 1/256 microstep is so small.
-            if (self.n+1) % MAX_STEP_MULTIPLIER == 0 {
+            if (self.n+1) % (m*2) == 0 {
                self.step_multiplier *= 2;
             }
-        } else if m != 1 && effective_ci > MIN_DELAY_VALUE*3.0 {
+        } else if m != 1 && effective_ci > MIN_DELAY_VALUE*2.1 {
                self.step_multiplier /= 2;
         }
     }
