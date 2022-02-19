@@ -10,11 +10,10 @@ use lvgl::{
 use alloc::format;
 
 use lvgl::cstr_core::CStr;
-use crate::{drivers::zaxis::{
+use crate::drivers::zaxis::{
     prelude::*,
-    MotionControl,
-    BottomSensor, self,
-}, util::SharedWithInterrupt};
+    self,
+};
 use crate::consts::zaxis::motion_control::*;
 
 pub struct MoveZ {
@@ -33,7 +32,6 @@ impl MoveZ {
         use lvgl::widgets::*;
         use lvgl::style::*;
         use lvgl::core::*;
-        use lvgl::prelude::*;
 
         let spacing = 12;
 
@@ -58,8 +56,6 @@ impl MoveZ {
                     if checked { UserAction::MoveUp }
                     else { UserAction::StopRequested }
                 );
-
-
             });
         });
 
@@ -131,19 +127,12 @@ impl MoveZ {
         });
 
         Label::new(&mut screen).apply(|obj| { obj
-            .set_text(&CStr::from_bytes_with_nul(b"Turbo Resin v0.1.2\0").unwrap())
+            .set_text(&CStr::from_bytes_with_nul(b"Turbo Resin v0.1.3\0").unwrap())
             .align_to(&screen, Align::BottomRight, -5, -5);
         });
 
-        let context = Self {
-            btn_move_up,
-            btn_move_down,
-            speed_slider,
-            speed_label,
-            position_label,
-            btn_calibrate,
-
-            user_action,
+        let context = Self { btn_move_up, btn_move_down, speed_slider,
+            speed_label, position_label, btn_calibrate, user_action
         };
 
         screen.apply(|s| {
@@ -151,8 +140,8 @@ impl MoveZ {
         })
     }
 
-    pub fn update_ui(&mut self, state: UiState) {
-        if state.zaxis_idle {
+    pub fn update_ui(&mut self, zaxis: &zaxis::MotionControlAsync) {
+        if zaxis.is_idle() {
             self.btn_move_up.clear_state(State::CHECKED | State::DISABLED);
             self.btn_move_down.clear_state(State::CHECKED | State::DISABLED);
             self.btn_calibrate.clear_state(State::CHECKED | State::DISABLED);
@@ -160,19 +149,13 @@ impl MoveZ {
 
         // set_text() makes a copy of the string internally.
         self.position_label.set_text(&CStr::from_bytes_with_nul(
-            format!("Position: {:.2} mm\0", state.zaxis_current_position.as_mm()).as_bytes()
+            format!("Position: {:.2} mm\0", zaxis.get_current_position().as_mm()).as_bytes()
         ).unwrap());
 
         self.speed_label.set_text(&CStr::from_bytes_with_nul(
-            format!("Max speed: {:.2} mm/s\0", state.zaxis_max_speed.as_mm()).as_bytes()
+            format!("Max speed: {:.2} mm/s\0", zaxis.get_max_speed().as_mm()).as_bytes()
         ).unwrap());
     }
-}
-
-pub struct UiState {
-    pub zaxis_idle: bool,
-    pub zaxis_current_position: Steps,
-    pub zaxis_max_speed: Steps,
 }
 
 #[derive(Debug)]
@@ -186,23 +169,17 @@ pub enum UserAction {
 
 impl UserAction {
     pub async fn do_user_action(&self, mc: &mut zaxis::MotionControlAsync) {
+        use UserAction::*;
         match self {
-            UserAction::MoveUp => {
-                mc.set_target_relative(40.0.mm());
-            },
-            UserAction::MoveDown => {
-                mc.set_target_relative((-40.0).mm());
-            }
-            UserAction::StopRequested => {
-                mc.stop();
-            }
-            UserAction::SetSpeed(v) => {
-                mc.set_max_speed(v.mm());
-            },
-            UserAction::Calibrate => {
-                zaxis::calibrate_origin(mc).await;
+            MoveUp => mc.set_target_relative(40.0.mm()),
+            MoveDown => mc.set_target_relative((-40.0).mm()),
+            StopRequested => mc.stop(),
+            SetSpeed(v) => mc.set_max_speed(v.mm()),
+            Calibrate => {
+                zaxis::calibrate_origin(mc, None).await;
                 mc.set_max_speed(MAX_SPEED.mm());
                 mc.set_target(0.0.mm());
+                mc.wait(zaxis::Event::Idle).await;
             }
         }
    }

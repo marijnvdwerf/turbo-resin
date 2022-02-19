@@ -1,23 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use embassy::channel::signal::Signal;
 use stm32f1xx_hal::{
     prelude::*,
-    gpio::*,
-    gpio::gpioa::*,
-    gpio::gpiob::*,
-    gpio::gpioc::*,
-    gpio::gpioe::*,
-    timer::{Timer, Tim2NoRemap, Event, CountDownTimer},
-    afio::MAPR,
-    pac::{TIM2, TIM7},
-    pwm::Channel, rcc::Clocks,
+    timer::{Timer, Event, CountDownTimer},
+    pac::TIM7,
 };
 
-use embedded_hal::digital::v2::OutputPin;
 use super::step_generator::StepGenerator;
 
-use crate::drivers::clock::delay_ns;
 use crate::consts::zaxis::{
     stepper::*,
     motion_control::*,

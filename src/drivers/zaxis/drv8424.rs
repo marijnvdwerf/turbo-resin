@@ -4,13 +4,12 @@ use stm32f1xx_hal::{
     prelude::*,
     gpio::*,
     gpio::gpioa::*,
-    gpio::gpiob::*,
     gpio::gpioc::*,
     gpio::gpioe::*,
-    timer::{Timer, Tim2NoRemap, Event, CountDownTimer},
+    timer::{Timer, Tim2NoRemap},
     afio::MAPR,
-    pac::{TIM2, TIM7},
-    pwm::Channel, rcc::Clocks,
+    pac::TIM2,
+    pwm::Channel,
 };
 
 use embedded_hal::digital::v2::OutputPin;

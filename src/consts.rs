@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub mod system {
-    pub const HEAP_SIZE: usize = 10*1024;
-    pub const SYSTICK_HZ: u32 = 1_000; // 1ms ticks
-}
-
 pub mod ext_flash {
     const FLASH_SIZE: u32 = 16*1024*1024; // 16MB
 }
@@ -67,6 +62,5 @@ pub mod touch_screen {
     pub const STABLE_X_Y_VALUE_TOLERANCE: u16 = 8; // in pixels
     // Number of consequtive samples to validate
     pub const NUM_STABLE_SAMPLES: u8 = 8;
-    pub const DEBOUNCE_INTERRUPT_DELAY_MS: u64 = 1;
     pub const SAMPLE_DELAY_MS: u64 = 1;
 }

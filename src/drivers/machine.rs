@@ -14,8 +14,6 @@ use crate::drivers::{
     touch_screen::*,
 };
 
-use crate::consts::system::*;
-
 pub struct Machine {
     pub ext_flash: ExtFlash,
     pub display: Display,
@@ -25,22 +23,8 @@ pub struct Machine {
     pub z_bottom_sensor: zaxis::BottomSensor,
 }
 
-
-use embassy::executor::Spawner;
-//use embassy::time::{Duration, Timer};
-use embassy_stm32::time::Hertz;
-use embassy_stm32::Config;
 use embassy_stm32::Peripherals;
-use embassy::util::Forever;
-use embassy_stm32::interrupt;
-use embassy::executor::{Executor, InterruptExecutor};
-use embassy::interrupt::InterruptExt;
-use embassy_stm32::gpio::{Level, Output, Speed};
-
-use stm32f1xx_hal::{
-    prelude::*,
-    pac,
-};
+use stm32f1xx_hal::prelude::*;
 
 impl Machine {
     pub fn new(cp: cortex_m::Peripherals, p: Peripherals) -> Self {
@@ -57,9 +41,7 @@ impl Machine {
         let mut gpioe = dp.GPIOE.split();
 
         let mut afio = dp.AFIO.constrain();
-        let exti = dp.EXTI;
         let clocks = super::clock::get_120mhz_clocks_config();
-
 
         // Note, we can't use separate functions, because we are consuming (as
         // in taking ownership of) the device peripherals struct, and so we
@@ -121,7 +103,7 @@ impl Machine {
         //  Stepper motor (Z-axis)
         //--------------------------
 
-        let (pa15, pb3, pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
+        let (_pa15, pb3, _pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
 
         let z_bottom_sensor = zaxis::BottomSensor::new(
             pb3,

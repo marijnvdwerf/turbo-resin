@@ -119,6 +119,19 @@ pub fn get_120mhz_clocks_config() -> Clocks {
     unsafe { core::mem::transmute(clocks) }
 }
 
+pub fn embassy_stm32_clock_from(clk: &Clocks) -> embassy_stm32::rcc::Clocks {
+    use embassy_stm32::time::Hertz;
+    embassy_stm32::rcc::Clocks {
+        sys: Hertz(clk.sysclk().0),
+        apb1: Hertz(clk.pclk1().0),
+        apb2: Hertz(clk.pclk2().0),
+        apb1_tim: Hertz(clk.pclk1_tim().0),
+        apb2_tim: Hertz(clk.pclk2_tim().0),
+        ahb1: Hertz(clk.hclk().0),
+        adc: Hertz(clk.adcclk().0),
+    }
+}
+
 
 // 3 clock cycles is 25ns at 120MHz
 #[inline(always)]

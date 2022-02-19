@@ -9,85 +9,43 @@
 
 #![feature(core_intrinsics)]
 
+extern crate alloc;
+
 mod drivers;
 mod consts;
 mod ui;
 mod util;
 
-use alloc::format;
-use lvgl::style::State;
-use stm32f1xx_hal::pac::Interrupt;
-use consts::system::*;
+use core::cell::RefCell;
+use core::mem::MaybeUninit;
+
+use lvgl::core::{Lvgl, TouchPad, Display, ObjExt};
+
+use embassy::{
+    time::{Duration, Timer},
+    util::Forever,
+    executor::InterruptExecutor,
+    interrupt::InterruptExt,
+    channel::signal::Signal,
+    blocking_mutex::CriticalSectionMutex as Mutex,
+};
+use embassy_stm32::{Config, interrupt};
+
 use consts::display::*;
 use drivers::{
     machine::Machine,
-    //machine::{Systick, Machine, prelude::*},
-    touch_screen::{TouchEvent, TouchScreen, ADS7846},
+    touch_screen::{TouchEvent, TouchScreen},
     display::Display as RawDisplay,
     zaxis,
 };
-
-use embedded_graphics::pixelcolor::Rgb565;
-
-use lvgl::core::{
-    Lvgl, TouchPad, Display, InputDevice, ObjExt
-};
-
-
-pub(crate) use runtime::debug;
-extern crate alloc;
-
-use core::cell::RefCell;
-use core::mem::MaybeUninit;
-use lvgl::core::Screen;
-
-mod runtime {
-    use super::*;
-
-    #[alloc_error_handler]
-    fn oom(l: core::alloc::Layout) -> ! {
-        panic!("Out of memory. Failed to allocate {} bytes", l.size());
-    }
-
-    #[inline(never)]
-    #[panic_handler]
-    fn panic(info: &core::panic::PanicInfo) -> ! {
-        debug!("{}", info);
-        loop {}
-    }
-
-    macro_rules! debug {
-        ($($tt:tt)*) => {
-            rtt_target::rprintln!($($tt)*)
-        }
-    }
-    pub(crate) use debug;
-}
-
-
-use embassy::executor::Spawner;
-use embassy::time::{Duration, Timer};
-use embassy_stm32::time::Hertz;
-use embassy_stm32::Config;
-use embassy_stm32::Peripherals;
-use embassy::util::Forever;
-use embassy_stm32::interrupt;
-use embassy::executor::{Executor, InterruptExecutor};
-use embassy::interrupt::InterruptExt;
-use embassy_stm32::gpio::{Level, Output, Speed};
-use embassy::channel::signal::Signal;
-use embassy_stm32::time::U32Ext;
-
-use embassy::blocking_mutex::CriticalSectionMutex as Mutex;
-
 use util::SharedWithInterrupt;
+pub(crate) use runtime::debug;
+
 
 static LAST_TOUCH_EVENT: Mutex<RefCell<Option<TouchEvent>>> = Mutex::new(RefCell::new(None));
 static Z_AXIS: Forever<zaxis::MotionControlAsync> = Forever::new();
-
 static USER_ACTION: Signal<crate::ui::UserAction> = Signal::new();
 
-/// Maximum priority Tasks
 mod maximum_priority_tasks {
     use super::*;
 
@@ -121,69 +79,50 @@ mod high_priority_tasks {
     }
 
     #[embassy::task]
-    pub async fn main_task(
-        //zaxis: &'static SharedWithInterrupt<zaxis::MotionControl>,
-        //zaxis: &'static mut zaxis::MotionControlAsync,
-    ) {
+    pub async fn main_task() {
         let z_axis = unsafe { Z_AXIS.steal() };
         // Here is the control center, coordinating the printer hardware.
         // We react to user input, and do something with it.
         loop {
             let user_action = USER_ACTION.wait().await;
             debug!("Executing user action: {:?}", user_action);
-            let action_fut = user_action.do_user_action(z_axis);
-            // Start the action.
-            //futures::pin_mut!(action_fut);
-            //futures::poll!(action_fut);
-            action_fut.await;
-            debug!("Done with user action");
+            user_action.do_user_action(z_axis).await;
+            debug!("Done executing user action");
         }
     }
 }
 
 mod low_priority_tasks {
+    use crate::drivers::touch_screen;
+
     use super::*;
 
     pub fn idle_task(
         mut lvgl: Lvgl,
-        mut lvgl_input_device: InputDevice<TouchPad>,
         mut display: Display<RawDisplay>,
-        mut ui: Screen<ui::MoveZ>,
     ) -> ! {
+        let mut lvgl_input_device = lvgl::core::InputDevice::<TouchPad>::new(&mut display);
+
+        let mut ui = ui::MoveZ::new(&display, &USER_ACTION);
+        display.load_screen(&mut ui);
+
+        let z_axis = unsafe { Z_AXIS.steal() };
         loop {
-            let z_axis = unsafe { Z_AXIS.steal() };
-            /*
-            let ui_state = z_axis.lock(|z_axis|
-                ui::UiState {
-                    zaxis_idle: z_axis.is_idle(),
-                    zaxis_current_position: z_axis.get_current_position(),
-                    zaxis_max_speed: z_axis.get_max_speed(),
-                }
-            );
-            */
-            let ui_state = ui::UiState {
-                zaxis_idle: z_axis.is_idle(),
-                zaxis_current_position: z_axis.get_current_position(),
-                zaxis_max_speed: z_axis.get_max_speed(),
-            };
-            ui.context().as_mut().unwrap().update_ui(ui_state);
+            ui.context().as_mut().unwrap().update_ui(z_axis);
 
             LAST_TOUCH_EVENT.lock(|e| {
-                *lvgl_input_device.state() = if let Some(e) = e.borrow().as_ref() {
-                    TouchPad::Pressed { x: e.x as i16, y: e.y as i16 }
-                } else {
-                    TouchPad::Released
-                };
+                *lvgl_input_device.state() = touch_screen::into_lvgl_event(&e.borrow());
             });
 
             lvgl.run_tasks();
-
             display.backlight.set_high();
         }
     }
 }
 
 fn lvgl_init(display: RawDisplay) -> (Lvgl, Display<RawDisplay>) {
+    use embedded_graphics::pixelcolor::Rgb565;
+
     let mut lvgl = Lvgl::new();
     lvgl.register_logger(|s| rtt_target::rprint!(s));
     // Display init with its draw buffer
@@ -196,37 +135,30 @@ fn lvgl_init(display: RawDisplay) -> (Lvgl, Display<RawDisplay>) {
 fn main() -> ! {
     rtt_target::rtt_init_print!();
 
-    let p = {
-        // We are doing the clock init here because of the gigadevice differences.
-        crate::drivers::clock::setup_clock_120m_hxtal();
-        let clk = embassy_stm32::rcc::Clocks {
-            sys: 120.mhz().into(),
-            apb1: 120.mhz().into(),
-            apb2: 60.mhz().into(),
-            apb1_tim: 120.mhz().into(),
-            apb2_tim: 60.mhz().into(),
-            ahb1: 120.mhz().into(),
-            adc: 30.mhz().into(),
-        };
-        unsafe { embassy_stm32::rcc::set_freqs(clk) };
+    let machine = {
+        let p = {
+            // We are doing the clock init here because of the gigadevice differences.
+            let clk = crate::drivers::clock::setup_clock_120m_hxtal();
+            let clk = crate::drivers::clock::embassy_stm32_clock_from(&clk);
+            unsafe { embassy_stm32::rcc::set_freqs(clk) };
 
-        // Note: TIM3 is taken for time accounting. It's configurable in Cargo.toml
-        embassy_stm32::init(Config::default())
+            // Note: TIM3 is taken for time accounting. It's configurable in Cargo.toml
+            embassy_stm32::init(Config::default())
+        };
+
+        let cp = cortex_m::Peripherals::take().unwrap();
+        Machine::new(cp, p)
     };
 
-    let cp = cortex_m::Peripherals::take().unwrap();
-    let machine = Machine::new(cp, p);
-    let touch_screen = machine.touch_screen;
-    let zaxis = zaxis::MotionControlAsync::new(SharedWithInterrupt::new(machine.stepper), machine.z_bottom_sensor);
-    Z_AXIS.put(zaxis);
-    //let zaxis: &'static mut _ = Z_AXIS.put(zaxis);
+    Z_AXIS.put(zaxis::MotionControlAsync::new(
+        SharedWithInterrupt::new(machine.stepper),
+        machine.z_bottom_sensor,
+    ));
 
-    let (lvgl, mut display) = lvgl_init(machine.display);
-    let lvgl_input_device = lvgl::core::InputDevice::<TouchPad>::new(&mut display);
-    let lvgl_ticks = lvgl.ticks();
+    let (lvgl, display) = lvgl_init(machine.display);
 
-    let mut move_z_ui = ui::MoveZ::new(&display, &USER_ACTION);
-    display.load_screen(&mut move_z_ui);
+    let mut lcd = machine.lcd;
+    lcd.draw_waves(16);
 
     // Maximum priority for the motion control of the stepper motor.
     // as we need to deliver precise pulses with micro-second accuracy.
@@ -237,8 +169,10 @@ fn main() -> ! {
         irq.enable();
     }
 
-    // High priority executor. It interrupts the low priority tasks (display rendering)
+    // High priority executor. It interrupts the low priority tasks (UI rendering)
     {
+        let lvgl_ticks = lvgl.ticks();
+        let touch_screen = machine.touch_screen;
         let irq = interrupt::take!(CAN1_RX0);
         irq.set_priority(interrupt::Priority::P6);
         static EXECUTOR_HIGH: Forever<InterruptExecutor<interrupt::CAN1_RX0>> = Forever::new();
@@ -251,9 +185,32 @@ fn main() -> ! {
     }
 
     // The idle task does UI drawing continuously.
-    low_priority_tasks::idle_task(lvgl, lvgl_input_device, display, move_z_ui)
+    low_priority_tasks::idle_task(lvgl, display)
 }
 
 // Wrap main(), otherwise auto-completion with rust-analyzer doesn't work.
 #[cortex_m_rt::entry]
 fn main_() -> ! { main() }
+
+mod runtime {
+    use super::*;
+
+    #[alloc_error_handler]
+    fn oom(l: core::alloc::Layout) -> ! {
+        panic!("Out of memory. Failed to allocate {} bytes", l.size());
+    }
+
+    #[inline(never)]
+    #[panic_handler]
+    fn panic(info: &core::panic::PanicInfo) -> ! {
+        debug!("{}", info);
+        loop {}
+    }
+
+    macro_rules! debug {
+        ($($tt:tt)*) => {
+            rtt_target::rprintln!($($tt)*)
+        }
+    }
+    pub(crate) use debug;
+}

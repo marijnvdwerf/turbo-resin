@@ -156,6 +156,16 @@ impl From<Packet> for TouchEvent {
     }
 }
 
+pub fn into_lvgl_event(e: &Option<TouchEvent>) -> lvgl::core::TouchPad {
+    use lvgl::core::TouchPad;
+    if let Some(e) = e.as_ref() {
+        TouchPad::Pressed { x: e.x as i16, y: e.y as i16 }
+    } else {
+        TouchPad::Released
+    }
+}
+
+
 impl ADS7846 {
     pub fn new(
         cs: p::PC7,

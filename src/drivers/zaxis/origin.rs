@@ -7,19 +7,14 @@ use crate::consts::zaxis::origin_calibration::*;
 
 use super::prelude::*;
 use crate::zaxis;
-use crate::debug;
 
-pub async fn calibrate_origin(mc: &mut zaxis::MotionControlAsync) {
-    // max_speed here should be an argument.
-    // We could be homing for build plate setup
-    // Or we could be homing for the start of the print, and be submersed in resin
-    // Different retract speed are needed.
-    let max_speed = PHASE1_HOMING_SPEED_MM_PER_SEC.mm();
+pub async fn calibrate_origin(mc: &mut zaxis::MotionControlAsync, max_speed: Option<Steps>) {
+    let max_speed = max_speed.unwrap_or(PHASE1_HOMING_SPEED_MM_PER_SEC.mm());
 
     mc.stop();
     mc.wait(zaxis::Event::Idle).await;
 
-    // The first thing is to get at the bottom of the zaxis.
+    // Phase 1: Go to the bottom of the zaxis.
     if !mc.bottom_sensor.active() {
         // We might be far away from the bottom, we want to go there quickly.
         mc.set_max_speed(max_speed);
@@ -29,9 +24,8 @@ pub async fn calibrate_origin(mc: &mut zaxis::MotionControlAsync) {
         mc.stop();
         mc.wait(zaxis::Event::Idle).await;
     }
-    // We are now below the bottom z axis sensor.
 
-    // We go up a little and down again. It's actually faster this way.
+    // Phase 2: Go a little above the sensor
     mc.set_max_speed(PHASE2_HOMING_SPEED_MM_PER_SEC.mm());
     mc.set_target(Steps::MAX);
     mc.wait(zaxis::Event::BottomSensor(false)).await;
@@ -41,10 +35,12 @@ pub async fn calibrate_origin(mc: &mut zaxis::MotionControlAsync) {
     mc.set_target_relative((PHASE3_HOMING_SPEED_MM_PER_SEC/2.0).mm());
     mc.wait(zaxis::Event::Idle).await;
 
+    // Phase 3: Go slowly down until we hit the sensor
     mc.set_max_speed(PHASE3_HOMING_SPEED_MM_PER_SEC.mm());
     mc.set_target(Steps::MIN);
     mc.wait(zaxis::Event::BottomSensor(true)).await;
 
+    // Set origin immediately and stop.
     mc.set_origin(-BOTTOM_SENSOR_POSITION_MM.mm());
 
     mc.stop();

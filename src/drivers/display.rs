@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use stm32f1xx_hal::{
-    prelude::*,
     gpio::*,
     gpio::gpioa::*,
     gpio::gpioc::*,
     gpio::gpiod::*,
     gpio::gpioe::*,
-    //pac::Peripherals,
-    //rcc::{Clocks, APB1},
-    delay::Delay,
     pac::{self, FSMC},
 };
 
