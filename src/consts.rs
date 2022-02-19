@@ -41,20 +41,20 @@ pub mod zaxis {
         pub const STEP_TIMER_MIN_DELAY_VALUE: f32 = 15.0;
     }
 
-    pub mod homing {
+    pub mod origin_calibration {
         // We consider Z=2mm the position where the bottom sensor activates.
-        // This difference is good so that when we do home next time, we don't
-        // crash into the LCD panel.
+        // This difference is good so that when we try to find the origin next
+        // time, we don't crash into the LCD panel because decelerating takes time.
         pub const BOTTOM_SENSOR_POSITION_MM: f32 = 2.0;
-        // This is the speed at which we move around when the user wants to
-        // calibrate her build plate
-        pub const QUICK_HOMING_SPEED_MM_PER_SEC: f32 = 10.0;
-        // We position the build plate above the bottom Z sensor,
-        // And start fine homing from there.
-        pub const FINE_HOMING_START_POSITION_MM: f32 = 0.5;
-        // < 2mm/s seems to produce precise results
-        // 0.5mm/s is very conservative
-        pub const FINE_HOMING_SPEED_MM_PER_SEC: f32 = 0.5;
+        // Phase 1 speed: We are going down from an arbitrary place to reach the
+        // bottom where the bottom sensor activates.
+        pub const PHASE1_HOMING_SPEED_MM_PER_SEC: f32 = 10.0;
+        // Phase 2 speed: We rise up above the z-axis bottom sensor at a moderate speed.
+        pub const PHASE2_HOMING_SPEED_MM_PER_SEC: f32 = 2.0;
+        // Phase 3 speed: This is the speed that matters to find precisely where
+        // the bottom sensor activates. We are going at slow speed, but we are
+        // going through a small distance.
+        pub const PHASE3_HOMING_SPEED_MM_PER_SEC: f32 = 0.2;
     }
 }
 

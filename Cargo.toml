@@ -27,7 +27,6 @@ futures = { version = "0.3", default-features = false, features = ["async-await"
 embassy = { path = "embassy/embassy" }
 embassy-stm32 = { path = "embassy/embassy-stm32", features= ["nightly", "stm32f107rc", "unstable-pac", "time-driver-tim3", "exti"] }
 
-
 #arrayvec = {version = "0.7", default-features = false }
 #cty = "0.2"
 #embedded-time = "0.12"
