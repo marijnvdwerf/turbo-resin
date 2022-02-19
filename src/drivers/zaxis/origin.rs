@@ -15,7 +15,7 @@ pub async fn calibrate_origin(mc: &mut zaxis::MotionControlAsync) {
     // Different retract speed are needed.
     let max_speed = QUICK_HOMING_SPEED_MM_PER_SEC.mm();
 
-    mc.controlled_stop();
+    mc.stop();
     mc.wait(zaxis::Event::Idle).await;
 
     // The first thing is to get at the bottom of the zaxis.
@@ -25,7 +25,7 @@ pub async fn calibrate_origin(mc: &mut zaxis::MotionControlAsync) {
         mc.set_target(Steps::MIN);
         mc.wait(zaxis::Event::BottomSensor(true)).await;
 
-        mc.controlled_stop();
+        mc.stop();
         mc.wait(zaxis::Event::Idle).await;
     }
 
@@ -41,5 +41,5 @@ pub async fn calibrate_origin(mc: &mut zaxis::MotionControlAsync) {
 
     mc.set_origin(-BOTTOM_SENSOR_POSITION_MM.mm());
 
-    mc.controlled_stop();
+    mc.stop();
 }

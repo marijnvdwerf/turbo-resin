@@ -194,7 +194,7 @@ impl UserAction {
                 mc.set_target_relative((-40.0).mm());
             }
             UserAction::StopRequested => {
-                mc.controlled_stop();
+                mc.stop();
             }
             UserAction::SetSpeed(v) => {
                 mc.set_max_speed(v.mm());

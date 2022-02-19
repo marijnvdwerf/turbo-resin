@@ -85,7 +85,7 @@ impl MotionControl {
             // This whole interrupt routine takes at most 300 CPU cycles to run.
             // That's 2.5us. That's a x6 margin.
         } else {
-            self.stop();
+            self.hard_stop();
         }
     }
 
@@ -141,13 +141,13 @@ impl MotionControl {
         self.current_position = -origin_position;
     }
 
-    pub fn controlled_stop(&mut self) {
+    pub fn stop(&mut self) {
         self.stepgen.set_remaining_steps(
             self.stepgen.num_steps_to_stop()
         );
     }
 
-    pub fn stop(&mut self) {
+    pub fn hard_stop(&mut self) {
         self.stepgen.set_remaining_steps(0);
         self.target = self.current_position;
 

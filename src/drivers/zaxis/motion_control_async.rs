@@ -69,8 +69,8 @@ impl MotionControlAsync {
         self.inner.lock(|mc| mc.set_target(target))
     }
 
-    pub fn controlled_stop(&mut self) {
-        self.inner.lock(|mc| mc.controlled_stop())
+    pub fn stop(&mut self) {
+        self.inner.lock(|mc| mc.stop())
     }
 
     pub fn set_max_speed(&mut self, max_speed: Steps) {
@@ -89,8 +89,8 @@ impl MotionControlAsync {
         self.inner.lock(|mc| mc.set_origin(origin_position))
     }
 
-    pub fn stop(&mut self) {
-        self.inner.lock(|mc| mc.stop())
+    pub fn hard_stop(&mut self) {
+        self.inner.lock(|mc| mc.hard_stop())
     }
 
     pub fn is_idle(&self) -> bool {
