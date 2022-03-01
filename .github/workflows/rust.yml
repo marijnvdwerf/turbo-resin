@@ -14,8 +14,12 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: recursive
-    - run: rustup target add thumbv7em-none-eabihf
-    - run: rustup override set nightly
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+        target: thumbv7em-none-eabihf
+        toolchain: nightly
+        override: true
     - name: Build
       run: cargo build --target thumbv7em-none-eabihf --verbose 
     - name: Run tests
