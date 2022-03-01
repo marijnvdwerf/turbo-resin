@@ -15,6 +15,7 @@ jobs:
       with:
         submodules: recursive
     - run: rustup target add thumbv7em-none-eabihf
+    - run: rustup override set nightly
     - name: Build
       run: cargo build --verbose
     - name: Run tests
