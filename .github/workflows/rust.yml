@@ -12,6 +12,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - run: rustup target add thumbv7em-none-eabihf
     - name: Build
       run: cargo build --verbose
     - name: Run tests
