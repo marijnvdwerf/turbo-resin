@@ -1,0 +1,39 @@
+name: Rust
+
+on: push
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - name: install GNU Arm Embedded Toolchain
+      uses: carlosperate/arm-none-eabi-gcc-action@v1
+      with:
+        release: latest
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        target: thumbv7em-none-eabihf
+        toolchain: nightly
+        override: true
+    - name: Build
+      run: cargo build --release --target thumbv7em-none-eabihf --verbose 
+      env:
+        DEP_LV_CONFIG_PATH: ${{ github.workspace }}
+    - name: Run tests
+      run: cargo test --target thumbv7em-none-eabihf --verbose
